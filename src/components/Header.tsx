@@ -1,12 +1,14 @@
 import React from 'react';
-import { Search, ShoppingCart } from 'lucide-react';
+import { Search, ShoppingCart, User } from 'lucide-react';
 import { Product } from '../types/machinery';
 import { HaoSailLogo } from './HaoSailLogo';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   onOpenSearch: () => void;
   onOpenCart: () => void;
+  onOpenAuth?: () => void;
   onOpenComparison?: () => void;
   onOpenAdvisor?: () => void;
   onOpenProforma?: () => void;
@@ -30,12 +32,14 @@ const NAV_LINKS = [
 export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenCart,
+  onOpenAuth,
   cartCount,
   onNavigateCategory,
   onReturnHome,
   activeCategory,
 }) => {
   const { isDarkMode } = useTheme();
+  const { user, isAdmin, accountProfile } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#15181E]/95 backdrop-blur-md border-b border-[#E2E4E8] dark:border-[#262A33] transition-colors duration-150">
@@ -81,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
 
-        {/* Zone 3: Compact Search & Cart Actions */}
+        {/* Zone 3: Compact Search, Cart & Account Actions */}
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
@@ -106,6 +110,37 @@ export const Header: React.FC<HeaderProps> = ({
             <ShoppingCart className="h-3.5 w-3.5 text-[#004B97] dark:text-sky-400" />
             <span className="font-mono tabular-nums font-semibold">{cartCount}</span>
           </button>
+
+          {onOpenAuth && (
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className="btn-press flex items-center gap-2 rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#1C2029] hover:border-[#004B97] dark:hover:border-sky-400 text-[#111315] dark:text-white px-2.5 py-1.5 text-xs font-medium cursor-pointer whitespace-nowrap shrink-0"
+              aria-label={user ? 'Workshop Account' : 'Sign In'}
+              title={user ? accountProfile?.displayName || user.email || 'Workshop Account' : 'Sign In / Create Account'}
+            >
+              {user && (accountProfile?.photoUrl || user.photoURL) ? (
+                <img
+                  src={accountProfile?.photoUrl || user.photoURL || ''}
+                  alt={accountProfile?.displayName || 'Account avatar'}
+                  referrerPolicy="no-referrer"
+                  className="h-4 w-4 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <User className="h-3.5 w-3.5 text-[#004B97] dark:text-sky-400 shrink-0" />
+              )}
+              <span className="hidden sm:inline max-w-[110px] truncate">
+                {user
+                  ? (accountProfile?.displayName || user.displayName || 'Account').split(' ')[0]
+                  : 'Sign In'}
+              </span>
+              {user && isAdmin && (
+                <span className="hidden md:inline font-mono text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
+                  Admin
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </header>

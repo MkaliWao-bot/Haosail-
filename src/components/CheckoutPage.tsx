@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,6 +11,7 @@ import {
   X,
   Plus,
   Minus,
+  LogIn,
 } from 'lucide-react';
 import { CartItem, Product, CheckoutPlanPreset } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
@@ -22,6 +23,7 @@ import {
   AccessoryItem,
 } from '../data/accessoryData';
 import { accessoryToProduct } from '../utils/accessoryToProduct';
+import { useAuth } from '../context/AuthContext';
 
 interface CheckoutPageProps {
   cartItems: CartItem[];
@@ -29,6 +31,7 @@ interface CheckoutPageProps {
   initialVoucherCode?: string;
   onVoucherChange?: (code: string) => void;
   onBackToCatalog: () => void;
+  onOpenAuth?: () => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
   onAddToCart: (product: Product, quantity?: number) => void;
@@ -50,11 +53,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   initialVoucherCode = '',
   onVoucherChange,
   onBackToCatalog,
+  onOpenAuth,
   onUpdateQuantity,
   onRemoveItem,
   onAddToCart,
   onClearCart,
 }) => {
+  const { user, accountProfile, privateInfo, saveOrderToAccount } = useAuth();
+  const pendingOrderIdRef = useRef<string>('');
   const [formData, setFormData] = useState({
     fullName: '',
     companyName: '',
@@ -85,6 +91,24 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       }
     }
   }, [initialVoucherCode]);
+
+  useEffect(() => {
+    if (!user) return;
+    setFormData((prev) => ({
+      ...prev,
+      fullName: prev.fullName || accountProfile?.displayName || user.displayName || '',
+      companyName: prev.companyName || accountProfile?.workshopName || '',
+      email: prev.email || privateInfo?.email || user.email || '',
+      phone: prev.phone || privateInfo?.phone || '',
+      mpesaNumber: prev.mpesaNumber || privateInfo?.phone || '',
+      kraPin: prev.kraPin || privateInfo?.kraPin || '',
+      address: prev.address || privateInfo?.address || '',
+      countyId:
+        !initialPreset?.preferredCountyId && privateInfo?.preferredCountyId
+          ? privateInfo.preferredCountyId
+          : prev.countyId,
+    }));
+  }, [user, accountProfile, privateInfo, initialPreset?.preferredCountyId]);
 
   const handleToggleService = (serviceId: string) => {
     setSelectedServices((prev) =>
@@ -249,10 +273,29 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return () => clearTimeout(timer);
   }, [showMpesaModal, mpesaStatus, mpesaCountdown]);
 
+  const persistOrderIfSignedIn = (generatedId: string) => {
+    if (!user || !generatedId) return;
+    const summary = cartItems
+      .map((item) => `${item.quantity}x ${item.product.name}`)
+      .join(', ');
+    void saveOrderToAccount({
+      orderId: generatedId,
+      companyName: formData.companyName,
+      countyId: formData.countyId,
+      deliveryMode,
+      settlementMode: isLipaPolePoleActive ? 'lipa-pole-pole' : 'full',
+      totalAmountKes: grandTotal,
+      itemCount: totalUnits,
+      itemsSummary: summary,
+      voucherCode: appliedVoucher || undefined,
+    });
+  };
+
   const handlePlaceOrder = (e: React.FormEvent) => {
     e.preventDefault();
     const generatedId = `HS-KE-${Math.floor(100000 + Math.random() * 900000)}`;
     setOrderReference(generatedId);
+    pendingOrderIdRef.current = generatedId;
 
     if (requiresMpesaStk) {
       setShowMpesaModal(true);
@@ -264,6 +307,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       setTimeout(() => {
         setIsSubmitting(false);
         setIsOrderPlaced(true);
+        persistOrderIfSignedIn(generatedId);
       }, 900);
     }
   };
@@ -280,6 +324,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       setTimeout(() => {
         setShowMpesaModal(false);
         setIsOrderPlaced(true);
+        persistOrderIfSignedIn(pendingOrderIdRef.current || orderReference);
       }, 1100);
     }, 1000);
   };
@@ -632,13 +677,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={hasWorkshopInput ? handleClearSampleWorkshop : handleFillSampleWorkshop}
-                    className="font-mono text-[11px] font-medium text-[#004B97] dark:text-sky-400 hover:underline cursor-pointer shrink-0 whitespace-nowrap"
-                  >
-                    {hasWorkshopInput ? 'Clear Fields' : 'Fill Sample Workshop'}
-                  </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {!user && onOpenAuth && (
+                      <button
+                        type="button"
+                        onClick={onOpenAuth}
+                        className="inline-flex items-center gap-1 font-mono text-[11px] font-medium text-[#004B97] dark:text-sky-400 hover:underline cursor-pointer whitespace-nowrap"
+                      >
+                        <LogIn className="h-3 w-3" />
+                        <span>Sign In / Register</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={hasWorkshopInput ? handleClearSampleWorkshop : handleFillSampleWorkshop}
+                      className="font-mono text-[11px] font-medium text-[#004B97] dark:text-sky-400 hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                    >
+                      {hasWorkshopInput ? 'Clear Fields' : 'Fill Sample Workshop'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">

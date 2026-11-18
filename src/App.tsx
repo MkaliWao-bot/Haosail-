@@ -14,6 +14,7 @@ import { CheckoutPage } from './components/CheckoutPage';
 import { GeminiAdvisorModal } from './components/GeminiAdvisorModal';
 import { ProformaInvoiceModal } from './components/ProformaInvoiceModal';
 import { SpecSheetModal } from './components/SpecSheetModal';
+import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
 import { initTactileButtonPing } from './utils/tactileClick';
 import { LayoutGrid, GitCompare, ShoppingBag, FileText, X, ArrowRight } from 'lucide-react';
@@ -78,6 +79,7 @@ export default function App() {
   } | null>(null);
   const [checkoutPreset, setCheckoutPreset] = useState<CheckoutPlanPreset | null>(null);
   const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>('');
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   const handleOpenProforma = (product?: Product) => {
     setProformaProduct(product || null);
@@ -125,6 +127,7 @@ export default function App() {
     setIsAdvisorOpen(false);
     setIsProformaOpen(false);
     setSpecSheetState(null);
+    setIsAuthOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -260,6 +263,7 @@ export default function App() {
         <Header
           onOpenSearch={() => setIsSearchOpen(true)}
           onOpenCart={() => setIsCartOpen(true)}
+          onOpenAuth={() => setIsAuthOpen(true)}
           onOpenComparison={() => setIsComparisonOpen(true)}
           onOpenAdvisor={() => setIsAdvisorOpen(true)}
           onOpenProforma={() => handleOpenProforma()}
@@ -282,6 +286,7 @@ export default function App() {
             initialVoucherCode={appliedVoucherCode}
             onVoucherChange={(code) => setAppliedVoucherCode(code)}
             onBackToCatalog={() => setCurrentView('catalog')}
+            onOpenAuth={() => setIsAuthOpen(true)}
             onUpdateQuantity={handleUpdateCartQuantity}
             onRemoveItem={handleRemoveFromCart}
             onAddToCart={handleAddToCart}
@@ -455,6 +460,12 @@ export default function App() {
         selectedVoltage={specSheetState?.voltage}
         selectedCountyId={specSheetState?.countyId}
         onRequestProforma={(product) => handleOpenProforma(product)}
+      />
+
+      {/* User Login & Workshop Account Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
       />
 
       {/* Mobile Compact Action Bar */}

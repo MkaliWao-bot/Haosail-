@@ -1,0 +1,249 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core identity and validation primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOrderId(id) {
+      return id is string && id.size() >= 4 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'felitexcyber001@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint: AdminAccount (/admins/{adminId})
+    function isValidAdminAccount(data, adminId) {
+      return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.uid is string
+        && data.uid == adminId
+        && isValidId(data.uid)
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 120
+        && data.grantedBy is string
+        && data.grantedBy == request.auth.uid
+        && isValidId(data.grantedBy)
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: UserAccount (/users/{userId})
+    function isValidUserAccount(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'photoUrl', 'workshopName', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && isValidId(data.uid)
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 100
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && (!('workshopName' in data) || (data.workshopName is string && data.workshopName.size() <= 120))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: UserPrivateInfo (/users/{userId}/private/{docId})
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'kraPin', 'address', 'preferredCountyId', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && isValidId(data.uid)
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 120
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 30))
+        && (!('kraPin' in data) || (data.kraPin is string && data.kraPin.size() <= 20))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 200))
+        && (!('preferredCountyId' in data) || (data.preferredCountyId is string && data.preferredCountyId.size() <= 40 && data.preferredCountyId.matches('^[a-z0-9\\-]+$')))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: UserOrder (/users/{userId}/orders/{orderId})
+    function isValidUserOrder(data, userId, orderId) {
+      return data.keys().hasAll([
+          'orderId', 'userId', 'countyId', 'deliveryMode',
+          'settlementMode', 'status', 'totalAmountKes', 'itemCount',
+          'itemsSummary', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderId', 'userId', 'companyName', 'countyId', 'deliveryMode',
+          'settlementMode', 'status', 'totalAmountKes', 'itemCount',
+          'itemsSummary', 'voucherCode', 'createdAt', 'updatedAt'
+        ])
+        && data.orderId is string
+        && data.orderId == orderId
+        && isOrderId(data.orderId)
+        && data.userId is string
+        && data.userId == userId
+        && (!('companyName' in data) || (data.companyName is string && data.companyName.size() <= 120))
+        && data.countyId is string
+        && data.countyId.size() >= 1
+        && data.countyId.size() <= 40
+        && data.countyId.matches('^[a-z0-9\\-]+$')
+        && data.deliveryMode in ['direct-site', 'depot-pickup']
+        && data.settlementMode in ['full', 'lipa-pole-pole']
+        && data.status in ['confirmed', 'dispatched', 'completed']
+        && (data.totalAmountKes is int || data.totalAmountKes is float)
+        && data.totalAmountKes >= 0
+        && data.itemCount is int
+        && data.itemCount >= 1
+        && data.itemCount <= 500
+        && data.itemsSummary is string
+        && data.itemsSummary.size() >= 1
+        && data.itemsSummary.size() <= 500
+        && (!('voucherCode' in data) || (data.voucherCode is string && data.voucherCode.size() <= 30))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrderTransition(prevStatus, nextStatus) {
+      return (prevStatus == 'confirmed' && nextStatus in ['confirmed', 'dispatched'])
+        || (prevStatus == 'dispatched' && nextStatus in ['dispatched', 'completed']);
+    }
+
+    // Admin Authorization Registry (strictly admin-managed; users can check own UID doc)
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isBootstrappedAdmin() && resource.data.uid is string;
+
+      allow create: if isValidId(adminId)
+        && isAdmin()
+        && isValidAdminAccount(incoming(), adminId)
+        && incoming().createdAt == request.time;
+
+      allow update: if false;
+      allow delete: if isValidId(adminId) && isAdmin();
+    }
+
+    // CollectionGroup rule for Admin order dispatch board (no get/exists inside list)
+    match /{path=**}/orders/{orderId} {
+      allow list: if isBootstrappedAdmin() && resource.data.userId is string;
+    }
+
+    // Account root document (owner read/write, admin read)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'workshopName', 'updatedAt']);
+
+      allow delete: if false;
+
+      // Private PII subcollection (strictly owner-only, Master Gate verifies parent account)
+      match /private/{docId} {
+        allow get: if isValidId(userId)
+          && docId == 'info'
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow create: if isValidId(userId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isValidId(userId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'kraPin', 'address', 'preferredCountyId', 'updatedAt'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if false;
+      }
+
+      // User Procurement Orders subcollection
+      match /orders/{orderId} {
+        allow get: if isValidId(userId)
+          && isOrderId(orderId)
+          && (
+            (isOwner(userId) && exists(/databases/$(database)/documents/users/$(userId)))
+            || isAdmin()
+          );
+
+        allow list: if (isSignedIn() && request.auth.uid == userId && resource.data.userId == request.auth.uid)
+          || (isBootstrappedAdmin() && resource.data.userId is string);
+
+        allow create: if isValidId(userId)
+          && isOrderId(orderId)
+          && isOwner(userId)
+          && isValidUserOrder(incoming(), userId, orderId)
+          && incoming().userId == request.auth.uid
+          && incoming().status == 'confirmed'
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isValidId(userId)
+          && isOrderId(orderId)
+          && (isOwner(userId) || isAdmin())
+          && isValidUserOrder(incoming(), userId, orderId)
+          && (
+            isAdmin() || (
+              existing().status != 'completed'
+              && isValidOrderTransition(existing().status, incoming().status)
+            )
+          )
+          && incoming().orderId == existing().orderId
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "User Account",
+      "description": "Primary workshop account profile linked to authenticated Firebase user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "workshopName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "User Private Contact & Tax Profile",
+      "description": "Isolated PII document storing contact phone, KRA PIN, email, and delivery address.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "kraPin": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "preferredCountyId": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^[a-z0-9\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "UserOrder": {
+      "title": "Procurement Order Record",
+      "description": "Authenticated buyer machinery procurement order summary saved under the user account.",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "countyId": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^[a-z0-9\\-]+$"
+        },
+        "deliveryMode": {
+          "type": "string",
+          "enum": ["direct-site", "depot-pickup"]
+        },
+        "settlementMode": {
+          "type": "string",
+          "enum": ["full", "lipa-pole-pole"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "dispatched", "completed"]
+        },
+        "totalAmountKes": {
+          "type": "number"
+        },
+        "itemCount": {
+          "type": "integer"
+        },
+        "itemsSummary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "voucherCode": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "orderId",
+        "userId",
+        "countyId",
+        "deliveryMode",
+        "settlementMode",
+        "status",
+        "totalAmountKes",
+        "itemCount",
+        "itemsSummary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminAccount": {
+      "title": "Administrator Authorization Record",
+      "description": "Server-validated admin grant record indexed by verified Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Top-level account record owned strictly by the matching Firebase Auth UID."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated private PII subcollection (`info` document) readable and writable only by owner."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/UserOrder" },
+      "description": "Procurement order history scoped strictly under the authenticated user's account."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminAccount" },
+      "description": "Admin authorization registry; users cannot self-assign admin status."
+    }
+  }
+}
