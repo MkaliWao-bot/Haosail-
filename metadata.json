@@ -1,0 +1,6 @@
+{
+  "name": "Ironwood Machinery",
+  "description": "Industrial powertools, precision woodworking machinery, and shop equipment with instant spec search.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
