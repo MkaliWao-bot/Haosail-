@@ -59,11 +59,8 @@ export default function App() {
     }
   }, [cartItems]);
 
-  // Spec comparison list (PS-3200 Panel Saw vs CS-3000 Circular Saw)
-  const [compareList, setCompareList] = useState<Product[]>([
-    PRODUCTS[6], // HS-PS3200-SLD
-    PRODUCTS[10] // HS-CS3000-PRO
-  ]);
+  // Spec comparison list starts blank so users can select machines afresh
+  const [compareList, setCompareList] = useState<Product[]>([]);
 
   // Modal states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
