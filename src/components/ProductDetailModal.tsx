@@ -13,6 +13,7 @@ import {
 import { Product, CheckoutPlanPreset } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
 import { KENYAN_COUNTY_HUBS } from '../data/accessoryData';
+import { STORE_CONFIG } from '../config/storeConfig';
 import { buildProductWhatsAppUrl } from '../utils/whatsapp';
 
 interface ProductDetailModalProps {
@@ -70,7 +71,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [installmentCadence, setInstallmentCadence] = useState<'monthly' | 'weekly'>('monthly');
   const [loanTenureMonths, setLoanTenureMonths] = useState<number>(12);
   const [loanTenureWeeks, setLoanTenureWeeks] = useState<number>(24);
-  const [selectedChannel, setSelectedChannel] = useState<string>('M-Pesa Paybill 408282');
+  const [selectedChannel, setSelectedChannel] = useState<string>(
+    `M-Pesa Paybill ${STORE_CONFIG.paybill}`
+  );
   const [planSubmitted, setPlanSubmitted] = useState<boolean>(false);
   const [showPlanForm, setShowPlanForm] = useState<boolean>(false);
   const [applicantName, setApplicantName] = useState<string>('');
@@ -580,7 +583,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           onChange={(e) => setSelectedChannel(e.target.value)}
                           className="rounded border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-2 py-1 text-[11px] font-medium text-[#111315] dark:text-slate-200 focus:border-[#004B97] focus:outline-none cursor-pointer"
                         >
-                          <option value="M-Pesa Paybill 408282">M-Pesa Paybill 408282</option>
+                          <option value={`M-Pesa Paybill ${STORE_CONFIG.paybill}`}>
+                            M-Pesa Paybill {STORE_CONFIG.paybill}
+                          </option>
                           <option value="KCB Lipa Pole Pole">KCB Lipa Pole Pole</option>
                           <option value="NCBA Flex Plan">NCBA Flex Plan</option>
                         </select>

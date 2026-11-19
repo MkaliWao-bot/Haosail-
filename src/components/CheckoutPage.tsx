@@ -12,6 +12,7 @@ import {
   Plus,
   Minus,
   LogIn,
+  AlertCircle,
 } from 'lucide-react';
 import { CartItem, Product, CheckoutPlanPreset } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
@@ -24,6 +25,9 @@ import {
 } from '../data/accessoryData';
 import { accessoryToProduct } from '../utils/accessoryToProduct';
 import { useAuth } from '../context/AuthContext';
+import { useCatalogOverrides } from '../context/CatalogOverridesContext';
+import { STORE_CONFIG } from '../config/storeConfig';
+import { LegalTab } from './LegalComplianceModal';
 
 interface CheckoutPageProps {
   cartItems: CartItem[];
@@ -32,6 +36,7 @@ interface CheckoutPageProps {
   onVoucherChange?: (code: string) => void;
   onBackToCatalog: () => void;
   onOpenAuth?: () => void;
+  onOpenLegal?: (tab: LegalTab) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
   onAddToCart: (product: Product, quantity?: number) => void;
@@ -54,12 +59,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   onVoucherChange,
   onBackToCatalog,
   onOpenAuth,
+  onOpenLegal,
   onUpdateQuantity,
   onRemoveItem,
   onAddToCart,
   onClearCart,
 }) => {
   const { user, accountProfile, privateInfo, saveOrderToAccount } = useAuth();
+  const { applyOverrideToProduct } = useCatalogOverrides();
   const pendingOrderIdRef = useRef<string>('');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -136,7 +143,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     initialPreset?.loanTenureWeeks || 24
   );
   const [financingChannel, setFinancingChannel] = useState<string>(
-    initialPreset?.financingChannel || 'M-Pesa Paybill 408282'
+    initialPreset?.financingChannel || `M-Pesa Paybill ${STORE_CONFIG.paybill}`
   );
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<DepositMethod>('mpesa');
 
@@ -156,6 +163,15 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
   const [orderReference, setOrderReference] = useState('');
+  const [etimsControlNumber, setEtimsControlNumber] = useState('');
+  const [confirmedGrandTotal, setConfirmedGrandTotal] = useState<number | null>(null);
+  const [emailReceiptStatus, setEmailReceiptStatus] = useState<{
+    delivered: boolean;
+    reason?: string;
+  } | null>(null);
+  const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
+  const [orderSyncState, setOrderSyncState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [orderSyncError, setOrderSyncError] = useState<string | null>(null);
 
   // Safaricom Daraja M-Pesa STK Push simulation state
   const [showMpesaModal, setShowMpesaModal] = useState(false);
@@ -259,7 +275,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const handleQuickAdd = (machineId: string) => {
     const found = PRODUCTS.find((p) => p.id === machineId);
     if (found) {
-      onAddToCart(found, 1);
+      onAddToCart(applyOverrideToProduct(found), 1);
     }
   };
 
@@ -273,42 +289,111 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return () => clearTimeout(timer);
   }, [showMpesaModal, mpesaStatus, mpesaCountdown]);
 
-  const persistOrderIfSignedIn = (generatedId: string) => {
+  const persistOrderIfSignedIn = async (
+    generatedId: string,
+    verifiedEtims?: string,
+    verifiedTotal?: number
+  ) => {
     if (!user || !generatedId) return;
+    setOrderSyncState('saving');
+    setOrderSyncError(null);
     const summary = cartItems
       .map((item) => `${item.quantity}x ${item.product.name}`)
       .join(', ');
-    void saveOrderToAccount({
+    const resolvedPaymentMethod = isLipaPolePoleActive ? depositPaymentMethod : paymentMethod;
+    const result = await saveOrderToAccount({
       orderId: generatedId,
       companyName: formData.companyName,
       countyId: formData.countyId,
       deliveryMode,
       settlementMode: isLipaPolePoleActive ? 'lipa-pole-pole' : 'full',
-      totalAmountKes: grandTotal,
+      paymentMethod: resolvedPaymentMethod,
+      totalAmountKes: verifiedTotal ?? confirmedGrandTotal ?? grandTotal,
       itemCount: totalUnits,
       itemsSummary: summary,
       voucherCode: appliedVoucher || undefined,
+      etimsControlNumber: (verifiedEtims ?? etimsControlNumber) || undefined,
     });
+    if (result.ok) {
+      setOrderSyncState('saved');
+    } else {
+      setOrderSyncState('error');
+      setOrderSyncError(result.error || 'Unable to save order to your account.');
+    }
   };
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const generatedId = `HS-KE-${Math.floor(100000 + Math.random() * 900000)}`;
-    setOrderReference(generatedId);
-    pendingOrderIdRef.current = generatedId;
+    setOrderSubmitError(null);
+    setIsSubmitting(true);
 
-    if (requiresMpesaStk) {
-      setShowMpesaModal(true);
-      setMpesaStatus('prompting');
-      setMpesaCountdown(25);
-      setSimulatedPin('1234');
-    } else {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
+    try {
+      const idToken = user && user.emailVerified ? await user.getIdToken() : null;
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+          countyId: formData.countyId,
+          deliveryMode,
+          selectedServices,
+          voucherCode: appliedVoucher,
+          settlementMode: isLipaPolePoleActive ? 'lipa-pole-pole' : 'full',
+          depositPercent,
+          installmentCadence,
+          loanTenureMonths,
+          loanTenureWeeks,
+          paymentMethod: isLipaPolePoleActive ? depositPaymentMethod : paymentMethod,
+          buyerEmail: formData.email,
+          buyerName: formData.fullName,
+          companyName: formData.companyName,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        orderReference?: string;
+        etimsControlNumber?: string;
+        pricing?: { grandTotal?: number };
+        notification?: { delivered: boolean; reason?: string };
+      };
+
+      if (!res.ok || !data.orderReference) {
+        setOrderSubmitError(
+          data.error || 'Unable to verify order pricing and yard availability. Please retry.'
+        );
+        return;
+      }
+
+      const verifiedOrderRef = data.orderReference;
+      const verifiedEtimsRef = data.etimsControlNumber || '';
+      const verifiedTotal = data.pricing?.grandTotal ?? grandTotal;
+
+      setOrderReference(verifiedOrderRef);
+      pendingOrderIdRef.current = verifiedOrderRef;
+      setEtimsControlNumber(verifiedEtimsRef);
+      setConfirmedGrandTotal(verifiedTotal);
+      setEmailReceiptStatus(data.notification || null);
+
+      if (requiresMpesaStk) {
+        setShowMpesaModal(true);
+        setMpesaStatus('prompting');
+        setMpesaCountdown(25);
+        setSimulatedPin('1234');
+      } else {
         setIsOrderPlaced(true);
-        persistOrderIfSignedIn(generatedId);
-      }, 900);
+        void persistOrderIfSignedIn(verifiedOrderRef, verifiedEtimsRef, verifiedTotal);
+      }
+    } catch {
+      setOrderSubmitError('Network error while verifying order. Check your connection and retry.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -324,7 +409,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       setTimeout(() => {
         setShowMpesaModal(false);
         setIsOrderPlaced(true);
-        persistOrderIfSignedIn(pendingOrderIdRef.current || orderReference);
+        void persistOrderIfSignedIn(
+          pendingOrderIdRef.current || orderReference,
+          etimsControlNumber,
+          confirmedGrandTotal ?? undefined
+        );
       }, 1100);
     }, 1000);
   };
@@ -366,7 +455,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               </p>
             </div>
 
-            <div className="font-mono text-xs text-[#5A606B] dark:text-slate-400 sm:text-right shrink-0">
+              <div className="font-mono text-xs text-[#5A606B] dark:text-slate-400 sm:text-right shrink-0 space-y-0.5">
               <div>Hub: {currentCounty.county}</div>
               <div>
                 Dispatch:{' '}
@@ -374,6 +463,47 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   {deliveryMode === 'direct-site' ? 'Direct Tailgate' : 'Depot Collection'}
                 </span>
               </div>
+              {etimsControlNumber && (
+                <div>
+                  KRA eTIMS:{' '}
+                  <span className="text-[#004B97] dark:text-sky-400 font-semibold">
+                    {etimsControlNumber}
+                  </span>
+                </div>
+              )}
+              {emailReceiptStatus && (
+                <div className="text-[11px]">
+                  {emailReceiptStatus.delivered ? (
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      Receipt emailed to {formData.email}
+                    </span>
+                  ) : (
+                    <span>Email queued offline ({emailReceiptStatus.reason})</span>
+                  )}
+                </div>
+              )}
+              {user && orderSyncState === 'saving' && (
+                <div className="text-[11px] text-[#004B97] dark:text-sky-400 mt-1">
+                  Syncing to My Orders...
+                </div>
+              )}
+              {user && orderSyncState === 'saved' && (
+                <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
+                  Synced to HaoSail Account
+                </div>
+              )}
+              {user && orderSyncState === 'error' && (
+                <div className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 flex items-center sm:justify-end gap-2">
+                  <span>{orderSyncError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void persistOrderIfSignedIn(orderReference)}
+                    className="underline font-semibold cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -468,7 +598,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
                   {!isLipaPolePoleActive && paymentMethod === 'bank-wire' && (
                     <p className="font-mono text-[11px] text-[#5A606B] dark:text-slate-300 pt-1">
-                      KCB Bank Kenya · Industrial Area · Acc 1298 4400 9123 · Ref {orderReference}
+                      {STORE_CONFIG.bankName} · {STORE_CONFIG.bankBranch} · Acc {STORE_CONFIG.bankAccount} · Ref {orderReference}
                     </p>
                   )}
 
@@ -512,7 +642,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                       Contract Total (KES)
                     </span>
                     <span className="font-mono text-base font-bold text-[#111315] dark:text-white tabular-nums">
-                      {formatKSh(grandTotal)}
+                      {formatKSh(confirmedGrandTotal ?? grandTotal)}
                     </span>
                   </div>
 
@@ -1117,8 +1247,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                           onChange={(e) => setFinancingChannel(e.target.value)}
                           className="w-full rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] px-3 py-2.5 text-[#111315] dark:text-white font-medium focus:border-[#004B97] dark:focus:border-sky-400 focus:outline-none cursor-pointer"
                         >
-                          <option value="M-Pesa Paybill 408282" className="dark:bg-[#15181E]">
-                            M-Pesa Paybill 408282
+                          <option
+                            value={`M-Pesa Paybill ${STORE_CONFIG.paybill}`}
+                            className="dark:bg-[#15181E]"
+                          >
+                            M-Pesa Paybill {STORE_CONFIG.paybill}
                           </option>
                           <option value="KCB Lipa Pole Pole" className="dark:bg-[#15181E]">
                             KCB Lipa Pole Pole
@@ -1199,7 +1332,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] text-[#5A606B] dark:text-slate-400">
-                          Automated Safaricom handset prompt via Paybill 408282.
+                          Automated Safaricom handset prompt via Paybill {STORE_CONFIG.paybill}.
                         </p>
                       </button>
 
@@ -1312,9 +1445,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
                     {paymentMethod === 'bank-wire' && (
                       <div className="border-t border-[#E2E4E8] dark:border-[#262A33] pt-3 font-mono text-[11px] text-[#5A606B] dark:text-slate-400">
-                        KCB Bank Kenya · Industrial Area Branch · Acc{' '}
+                        {STORE_CONFIG.bankName} · {STORE_CONFIG.bankBranch} · Acc{' '}
                         <span className="font-semibold text-[#111315] dark:text-white">
-                          1298 4400 9123
+                          {STORE_CONFIG.bankAccount}
                         </span>{' '}
                         (KES) · E-TIMS proforma issued upon confirmation.
                       </div>
@@ -1594,6 +1727,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   )}
                 </div>
 
+                {orderSubmitError && (
+                  <div className="mt-4 flex items-start gap-2 rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{orderSubmitError}</span>
+                  </div>
+                )}
+
                 {/* Primary Checkout Submit Action */}
                 <button
                   type="submit"
@@ -1625,13 +1765,28 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                           : 'translate-y-full opacity-0'
                       }`}
                     >
-                      <span>Confirming Procurement Order...</span>
+                      <span>Verifying Yard Stock &amp; Pricing...</span>
                     </span>
                   </span>
                 </button>
 
                 <p className="mt-3 text-center font-mono text-[11px] text-[#5A606B] dark:text-slate-400">
-                  KRA E-TIMS Invoice · 5-Year Factory Warranty · Transit Insured
+                  KRA E-TIMS Invoice ·{' '}
+                  <button
+                    type="button"
+                    onClick={() => onOpenLegal?.('warranty')}
+                    className="underline hover:text-[#004B97] dark:hover:text-sky-400 cursor-pointer"
+                  >
+                    5-Year Warranty
+                  </button>{' '}
+                  ·{' '}
+                  <button
+                    type="button"
+                    onClick={() => onOpenLegal?.(isLipaPolePoleActive ? 'credit' : 'terms')}
+                    className="underline hover:text-[#004B97] dark:hover:text-sky-400 cursor-pointer"
+                  >
+                    {isLipaPolePoleActive ? 'Lipa Pole Pole Terms' : 'Terms of Sale'}
+                  </button>
                 </p>
               </div>
             </div>
@@ -1654,7 +1809,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     Lipa na M-PESA STK Push
                   </h3>
                   <span className="text-[10px] text-emerald-100 font-mono">
-                    Paybill 408282 · HaoSail Industrial Kenya
+                    Paybill {STORE_CONFIG.paybill} · {STORE_CONFIG.brandName}
                   </span>
                 </div>
               </div>

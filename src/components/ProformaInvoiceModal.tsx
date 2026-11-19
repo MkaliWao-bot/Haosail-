@@ -7,6 +7,7 @@ import { Product, CartItem } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
 import { HaoSailLogo } from './HaoSailLogo';
 import { KENYAN_COUNTY_HUBS } from '../data/accessoryData';
+import { STORE_CONFIG } from '../config/storeConfig';
 
 interface ProformaInvoiceModalProps {
   isOpen: boolean;
@@ -147,14 +148,14 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
                 </span>
               </div>
               <p className="mt-2.5 text-xs font-semibold text-[#111315] dark:text-white print:text-slate-900">
-                HAOSAIL INDUSTRIAL KENYA LIMITED
+                {STORE_CONFIG.brandName.toUpperCase()} LIMITED
               </p>
               <p className="text-[11px] text-[#5A606B] dark:text-slate-400 leading-relaxed mt-0.5 print:text-slate-600">
-                Plot 48, Enterprise Road, Near City Cabanas
+                {STORE_CONFIG.yardAddress}
                 <br />
-                Industrial Area, Nairobi, Kenya
+                {STORE_CONFIG.salesPhoneDisplay} · {STORE_CONFIG.salesEmail}
                 <br />
-                PIN: <span className="font-mono font-semibold text-[#111315] dark:text-white print:text-slate-900">P051839201Z</span> | E-TIMS Reg: ET-NB-49821
+                PIN: <span className="font-mono font-semibold text-[#111315] dark:text-white print:text-slate-900">{STORE_CONFIG.companyKraPin}</span> | E-TIMS Reg: ET-NB-49821
               </p>
             </div>
 
@@ -331,17 +332,17 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
                 </span>
                 <div className="space-y-1 text-[#5A606B] dark:text-slate-300 font-mono text-[11px]">
                   <div>
-                    Bank: <strong className="text-[#111315] dark:text-white">KCB Bank Kenya Ltd</strong>
+                    Bank: <strong className="text-[#111315] dark:text-white">{STORE_CONFIG.bankName}</strong>
                   </div>
                   <div>
                     Branch:{' '}
-                    <strong className="text-[#111315] dark:text-white">Industrial Area, Commercial Street</strong>
+                    <strong className="text-[#111315] dark:text-white">{STORE_CONFIG.bankBranch}</strong>
                   </div>
                   <div>
-                    Account: <strong className="text-[#111315] dark:text-white">1298 4400 9123</strong> (KES)
+                    Account: <strong className="text-[#111315] dark:text-white">{STORE_CONFIG.bankAccount}</strong> (KES)
                   </div>
                   <div>
-                    Paybill / Lipa na M-Pesa: <strong className="text-[#111315] dark:text-white">408282</strong>
+                    Paybill / Lipa na M-Pesa: <strong className="text-[#111315] dark:text-white">{STORE_CONFIG.paybill}</strong>
                   </div>
                   <div>
                     Account Ref: <strong className="text-[#004B97] dark:text-sky-400">{invoiceNumber}</strong>

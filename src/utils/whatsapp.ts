@@ -1,7 +1,8 @@
 import { CartItem, Product } from '../types/machinery';
 import { formatKSh } from './currency';
+import { STORE_CONFIG } from '../config/storeConfig';
 
-export const HAOSAIL_WHATSAPP_NUMBER = '254700000000';
+export const HAOSAIL_WHATSAPP_NUMBER = STORE_CONFIG.whatsappNumber;
 
 export function buildProductWhatsAppUrl(
   product: Product,
@@ -24,37 +25,33 @@ export function buildProductWhatsAppUrl(
     `Power Spec: ${voltage}`,
     `Unit Price: ${formatKSh(product.price)} (${weightKg} kg)`,
     `Delivery Hub: ${hub}`,
+    `Please confirm yard availability and KRA E-TIMS proforma.`,
   ];
-
-  if (product.price > 80000) {
-    lines.push(`Lipa Pole Pole Inquiry: Eligible (from 20% deposit)`);
-  }
 
   return `https://wa.me/${HAOSAIL_WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
 }
 
 export function buildCartWhatsAppUrl(
   cartItems: CartItem[],
-  estimatedTotal: number
+  options?: {
+    countyName?: string;
+    totalAmount?: number;
+  }
 ): string {
   const itemLines = cartItems.map(
-    ({ product, quantity }) =>
-      `- ${quantity}x ${product.name} [${product.sku}] (${formatKSh(product.price * quantity)})`
-  );
-
-  const totalWeightKg = Math.round(
-    cartItems.reduce(
-      (sum, item) => sum + item.product.specs.weightLbs * 0.453592 * item.quantity,
-      0
-    )
+    ({ product, quantity }, idx) =>
+      `${idx + 1}. ${quantity}x ${product.name} (${product.sku}) — ${formatKSh(
+        product.price * quantity
+      )}`
   );
 
   const lines = [
-    `Hello HaoSail Machinery Desk, please confirm stock & proforma for my cart:`,
+    `Hello HaoSail Machinery Desk, I am requesting an equipment quote for my workshop:`,
     ...itemLines,
-    `Total Mass: ${totalWeightKg.toLocaleString()} kg`,
-    `Estimated Total (incl. VAT & Freight): ${formatKSh(estimatedTotal)}`,
-  ];
+    options?.countyName ? `Delivery County Hub: ${options.countyName}` : '',
+    options?.totalAmount ? `Estimated Subtotal: ${formatKSh(options.totalAmount)}` : '',
+    `Please share E-TIMS Proforma and dispatch timeline.`,
+  ].filter(Boolean);
 
   return `https://wa.me/${HAOSAIL_WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
 }

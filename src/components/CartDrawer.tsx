@@ -351,7 +351,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </button>
 
               <a
-                href={buildCartWhatsAppUrl(cartItems, total)}
+                href={buildCartWhatsAppUrl(cartItems, { totalAmount: total })}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-press flex w-full items-center justify-center gap-2 rounded-md border border-emerald-600/35 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-colors"

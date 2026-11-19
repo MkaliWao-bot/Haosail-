@@ -2,17 +2,21 @@ import React from 'react';
 import { Phone, Mail, MapPin, ShieldCheck, Sun, Moon, Monitor } from 'lucide-react';
 import { HaoSailLogo } from './HaoSailLogo';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { STORE_CONFIG } from '../config/storeConfig';
+import { LegalTab } from './LegalComplianceModal';
 
 interface FooterProps {
   onNavigateCategory: (category: string) => void;
   onOpenAdvisor?: () => void;
   onReturnHome?: () => void;
+  onOpenLegal?: (tab: LegalTab) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onNavigateCategory,
   onOpenAdvisor,
   onReturnHome,
+  onOpenLegal,
 }) => {
   const { theme, setTheme } = useTheme();
   const themeOptions: { id: ThemeMode; label: string; icon: React.ReactNode }[] = [
@@ -133,19 +137,40 @@ export const Footer: React.FC<FooterProps> = ({
                 </li>
               )}
               <li>
-                <span className="text-slate-400">
-                  Pre-Shipment Calibration Protocol
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal?.('warranty')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  5-Year Factory Warranty
+                </button>
               </li>
               <li>
-                <span className="text-slate-400">
-                  47-County Crane &amp; LTL Freight Dispatch
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal?.('credit')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Lipa Pole Pole &amp; Commercial LPO Terms
+                </button>
               </li>
               <li>
-                <span className="text-slate-400">
-                  Commercial Bank Asset Financing
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal?.('terms')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Terms of Sale &amp; KRA eTIMS
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onOpenLegal?.('privacy')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Privacy &amp; Data Protection
+                </button>
               </li>
             </ul>
           </div>
@@ -158,22 +183,25 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="mt-3 space-y-2.5 text-xs">
               <li className="flex items-center gap-2">
                 <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                <a href="tel:+254700000000" className="hover:text-white transition-colors font-mono tabular-nums">
-                  +254 700 000 000 (Mon–Sat 8am–6pm)
+                <a
+                  href={STORE_CONFIG.salesPhoneHref}
+                  className="hover:text-white transition-colors font-mono tabular-nums"
+                >
+                  {STORE_CONFIG.salesPhoneDisplay} (Mon–Sat 8am–6pm)
                 </a>
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                <a href="mailto:sales@haosail.ke" className="hover:text-white transition-colors">
-                  sales@haosail.ke
+                <a
+                  href={`mailto:${STORE_CONFIG.salesEmail}`}
+                  className="hover:text-white transition-colors"
+                >
+                  {STORE_CONFIG.salesEmail}
                 </a>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>
-                  HaoSail Commercial Distribution Center<br />
-                  Industrial Area, Nairobi, Kenya
-                </span>
+                <span>{STORE_CONFIG.yardAddress}</span>
               </li>
             </ul>
           </div>
@@ -181,11 +209,25 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Bottom sub-footer */}
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-[#262A33] pt-7 sm:flex-row text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} HaoSail Industrial Kenya. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {STORE_CONFIG.brandName}. All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <span>Commercial Industrial Equipment</span>
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('terms')}
+              className="hover:text-slate-300 transition-colors cursor-pointer"
+            >
+              Terms
+            </button>
             <span aria-hidden="true">·</span>
-            <span>haosail.ke</span>
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('privacy')}
+              className="hover:text-slate-300 transition-colors cursor-pointer"
+            >
+              Privacy
+            </button>
+            <span aria-hidden="true">·</span>
+            <span>{STORE_CONFIG.domain}</span>
 
             <div
               role="group"

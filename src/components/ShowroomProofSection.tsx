@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
+import { STORE_CONFIG } from '../config/storeConfig';
 
 interface ShowroomProofSectionProps {
   onOpenProforma: () => void;
@@ -64,7 +65,7 @@ export const ShowroomProofSection: React.FC<ShowroomProofSectionProps> = ({
               Verified Tax &amp; Lipa Pole Pole Papers
             </h3>
             <p className="text-xs text-[#5A606B] dark:text-slate-400 leading-relaxed">
-              Every machine above KSh 80,000 supports 20%–50% deposit via M-Pesa Paybill 408282 alongside official KRA E-TIMS proformas for SACCO and commercial bank financing.
+              Every machine above KSh 80,000 supports 20%–50% deposit via M-Pesa Paybill {STORE_CONFIG.paybill} alongside official KRA E-TIMS proformas for SACCO and commercial bank financing.
             </p>
           </div>
 

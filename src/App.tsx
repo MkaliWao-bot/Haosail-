@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PRODUCTS } from './data/machineryData';
 import { Product, FilterState, CartItem, Category, CheckoutPlanPreset } from './types/machinery';
+import { useCatalogOverrides } from './context/CatalogOverridesContext';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { CatalogSection } from './components/CatalogSection';
@@ -15,6 +16,7 @@ import { GeminiAdvisorModal } from './components/GeminiAdvisorModal';
 import { ProformaInvoiceModal } from './components/ProformaInvoiceModal';
 import { SpecSheetModal } from './components/SpecSheetModal';
 import { AuthModal } from './components/AuthModal';
+import { LegalComplianceModal, LegalTab } from './components/LegalComplianceModal';
 import { Footer } from './components/Footer';
 import { initTactileButtonPing } from './utils/tactileClick';
 import { LayoutGrid, GitCompare, ShoppingBag, FileText, X, ArrowRight } from 'lucide-react';
@@ -77,9 +79,35 @@ export default function App() {
     voltage?: string;
     countyId?: string;
   } | null>(null);
+  const { applyOverridesToProducts, applyOverrideToProduct } = useCatalogOverrides();
+  const liveProducts = useMemo(
+    () => applyOverridesToProducts(PRODUCTS),
+    [applyOverridesToProducts]
+  );
+
   const [checkoutPreset, setCheckoutPreset] = useState<CheckoutPlanPreset | null>(null);
   const [appliedVoucherCode, setAppliedVoucherCode] = useState<string>('');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<LegalTab | null>(null);
+
+  const syncedCartItems = useMemo(
+    () =>
+      cartItems.map((item) => ({
+        ...item,
+        product: applyOverrideToProduct(item.product),
+      })),
+    [cartItems, applyOverrideToProduct]
+  );
+
+  const liveSelectedProduct = useMemo(
+    () => (selectedProduct ? applyOverrideToProduct(selectedProduct) : null),
+    [selectedProduct, applyOverrideToProduct]
+  );
+
+  const liveProformaProduct = useMemo(
+    () => (proformaProduct ? applyOverrideToProduct(proformaProduct) : null),
+    [proformaProduct, applyOverrideToProduct]
+  );
 
   const handleOpenProforma = (product?: Product) => {
     setProformaProduct(product || null);
@@ -128,6 +156,7 @@ export default function App() {
     setIsProformaOpen(false);
     setSpecSheetState(null);
     setIsAuthOpen(false);
+    setLegalModalTab(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -281,12 +310,13 @@ export default function App() {
       <main className={`flex-1 pb-14 md:pb-0 ${isPrintDocumentOpen ? 'print:hidden' : ''}`}>
         {currentView === 'checkout' ? (
           <CheckoutPage
-            cartItems={cartItems}
+            cartItems={syncedCartItems}
             initialPreset={checkoutPreset}
             initialVoucherCode={appliedVoucherCode}
             onVoucherChange={(code) => setAppliedVoucherCode(code)}
             onBackToCatalog={() => setCurrentView('catalog')}
             onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenLegal={(tab) => setLegalModalTab(tab)}
             onUpdateQuantity={handleUpdateCartQuantity}
             onRemoveItem={handleRemoveFromCart}
             onAddToCart={handleAddToCart}
@@ -314,7 +344,7 @@ export default function App() {
 
             {/* Catalog Section with Fast Parametric Filters & Product Grid */}
             <CatalogSection
-              products={PRODUCTS}
+              products={liveProducts}
               filterState={filterState}
               onFilterChange={handleFilterChange}
               onResetFilters={handleResetFilters}
@@ -375,7 +405,7 @@ export default function App() {
       <SearchCommandModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        products={PRODUCTS}
+        products={liveProducts}
         onSelectProduct={(p) => setSelectedProduct(p)}
         onApplyCategoryFilter={handleCategoryNav}
       />
@@ -383,13 +413,13 @@ export default function App() {
       {/* Product Detail Modal (PDP & Spec Sheet) */}
       <div className={isPrintDocumentOpen ? 'print:hidden' : undefined}>
         <ProductDetailModal
-          key={selectedProduct?.id || 'empty-modal'}
-          product={selectedProduct}
+          key={liveSelectedProduct?.id || 'empty-modal'}
+          product={liveSelectedProduct}
           onClose={() => setSelectedProduct(null)}
           onAddToCart={handleAddToCart}
           onBuyNow={handleBuyNow}
           onToggleCompare={handleToggleCompare}
-          isCompared={selectedProduct ? compareList.some((p) => p.id === selectedProduct.id) : false}
+          isCompared={liveSelectedProduct ? compareList.some((p) => p.id === liveSelectedProduct.id) : false}
           onOpenAdvisor={() => setIsAdvisorOpen(true)}
           onRequestProforma={(product) => handleOpenProforma(product)}
           onOpenSpecSheet={(product, voltage, countyId) =>
@@ -413,7 +443,7 @@ export default function App() {
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        cartItems={cartItems}
+        cartItems={syncedCartItems}
         onUpdateQuantity={handleUpdateCartQuantity}
         onRemoveItem={handleRemoveFromCart}
         onAddToCart={(p, qty = 1) => handleAddToCart(p, qty)}
@@ -429,7 +459,7 @@ export default function App() {
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
-        cartItems={cartItems}
+        cartItems={syncedCartItems}
         onOrderCompleted={handleOrderCompleted}
       />
 
@@ -443,8 +473,8 @@ export default function App() {
       <ProformaInvoiceModal
         isOpen={isProformaOpen}
         onClose={() => setIsProformaOpen(false)}
-        product={proformaProduct}
-        cartItems={cartItems}
+        product={liveProformaProduct}
+        cartItems={syncedCartItems}
         onProceedToCheckout={() => {
           setIsProformaOpen(false);
           setCurrentView('checkout');
@@ -466,6 +496,13 @@ export default function App() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
+      />
+
+      {/* Commercial Legal, Warranty & Data Protection Modal */}
+      <LegalComplianceModal
+        isOpen={Boolean(legalModalTab)}
+        initialTab={legalModalTab || 'terms'}
+        onClose={() => setLegalModalTab(null)}
       />
 
       {/* Mobile Compact Action Bar */}
@@ -516,6 +553,7 @@ export default function App() {
           onNavigateCategory={handleCategoryNav}
           onOpenAdvisor={() => setIsAdvisorOpen(true)}
           onReturnHome={handleReturnHome}
+          onOpenLegal={(tab) => setLegalModalTab(tab)}
         />
       </div>
     </div>

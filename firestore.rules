@@ -57,6 +57,26 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    // Validation Blueprint: CatalogOverride (/catalogOverrides/{productId})
+    function isValidCatalogOverride(data, productId) {
+      return data.keys().hasAll(['productId', 'priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['productId', 'priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt'])
+        && data.productId is string
+        && data.productId == productId
+        && isOrderId(data.productId)
+        && (data.priceKes is int || data.priceKes is float)
+        && data.priceKes >= 100
+        && data.priceKes <= 50000000
+        && data.inStock is bool
+        && data.stockCount is int
+        && data.stockCount >= 0
+        && data.stockCount <= 10000
+        && data.updatedBy is string
+        && data.updatedBy == request.auth.uid
+        && isValidId(data.updatedBy)
+        && data.updatedAt is timestamp;
+    }
+
     // Validation Blueprint: UserAccount (/users/{userId})
     function isValidUserAccount(data, userId) {
       return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt'])
@@ -102,8 +122,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'orderId', 'userId', 'companyName', 'countyId', 'deliveryMode',
-          'settlementMode', 'status', 'totalAmountKes', 'itemCount',
-          'itemsSummary', 'voucherCode', 'createdAt', 'updatedAt'
+          'settlementMode', 'paymentMethod', 'status', 'totalAmountKes', 'itemCount',
+          'itemsSummary', 'voucherCode', 'etimsControlNumber', 'createdAt', 'updatedAt'
         ])
         && data.orderId is string
         && data.orderId == orderId
@@ -117,6 +137,7 @@ service cloud.firestore {
         && data.countyId.matches('^[a-z0-9\\-]+$')
         && data.deliveryMode in ['direct-site', 'depot-pickup']
         && data.settlementMode in ['full', 'lipa-pole-pole']
+        && (!('paymentMethod' in data) || data.paymentMethod in ['mpesa', 'bank-wire', 'lpo-credit', 'depot-pay'])
         && data.status in ['confirmed', 'dispatched', 'completed']
         && (data.totalAmountKes is int || data.totalAmountKes is float)
         && data.totalAmountKes >= 0
@@ -127,19 +148,40 @@ service cloud.firestore {
         && data.itemsSummary.size() >= 1
         && data.itemsSummary.size() <= 500
         && (!('voucherCode' in data) || (data.voucherCode is string && data.voucherCode.size() <= 30))
+        && (!('etimsControlNumber' in data) || (data.etimsControlNumber is string && data.etimsControlNumber.size() <= 64))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
 
     function isValidOrderTransition(prevStatus, nextStatus) {
-      return (prevStatus == 'confirmed' && nextStatus in ['confirmed', 'dispatched'])
+      return (prevStatus == 'confirmed' && nextStatus in ['confirmed', 'dispatched', 'completed'])
         || (prevStatus == 'dispatched' && nextStatus in ['dispatched', 'completed']);
+    }
+
+    // Live Catalog Overrides (publicly readable non-PII pricing/stock; Admin-only writes)
+    match /catalogOverrides/{productId} {
+      allow get: if isOrderId(productId);
+      allow list: if request.query.limit <= 200;
+
+      allow create: if isOrderId(productId)
+        && isAdmin()
+        && isValidCatalogOverride(incoming(), productId)
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOrderId(productId)
+        && isAdmin()
+        && isValidCatalogOverride(incoming(), productId)
+        && incoming().productId == existing().productId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isOrderId(productId) && isAdmin();
     }
 
     // Admin Authorization Registry (strictly admin-managed; users can check own UID doc)
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
-      allow list: if isBootstrappedAdmin() && resource.data.uid is string;
+      allow list: if isBootstrappedAdmin() && request.query.limit <= 200;
 
       allow create: if isValidId(adminId)
         && isAdmin()
@@ -152,7 +194,7 @@ service cloud.firestore {
 
     // CollectionGroup rule for Admin order dispatch board (no get/exists inside list)
     match /{path=**}/orders/{orderId} {
-      allow list: if isBootstrappedAdmin() && resource.data.userId is string;
+      allow list: if isBootstrappedAdmin() && request.query.limit <= 500;
     }
 
     // Account root document (owner read/write, admin read)
@@ -175,11 +217,11 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // Private PII subcollection (strictly owner-only, Master Gate verifies parent account)
+      // Private PII subcollection (owner read/write; admin single-doc read for verified order dispatch)
       match /private/{docId} {
         allow get: if isValidId(userId)
           && docId == 'info'
-          && isOwner(userId)
+          && (isOwner(userId) || isAdmin())
           && exists(/databases/$(database)/documents/users/$(userId));
 
         allow create: if isValidId(userId)
@@ -213,7 +255,7 @@ service cloud.firestore {
           );
 
         allow list: if (isSignedIn() && request.auth.uid == userId && resource.data.userId == request.auth.uid)
-          || (isBootstrappedAdmin() && resource.data.userId is string);
+          || (isBootstrappedAdmin() && request.query.limit <= 500);
 
         allow create: if isValidId(userId)
           && isOrderId(orderId)
@@ -225,9 +267,10 @@ service cloud.firestore {
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId));
 
+        // Only Admins may advance or override order fulfillment status
         allow update: if isValidId(userId)
           && isOrderId(orderId)
-          && (isOwner(userId) || isAdmin())
+          && isAdmin()
           && isValidUserOrder(incoming(), userId, orderId)
           && (
             isAdmin() || (

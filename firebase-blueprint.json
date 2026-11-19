@@ -113,6 +113,10 @@
           "type": "string",
           "enum": ["full", "lipa-pole-pole"]
         },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["mpesa", "bank-wire", "lpo-credit", "depot-pay"]
+        },
         "status": {
           "type": "string",
           "enum": ["confirmed", "dispatched", "completed"]
@@ -131,6 +135,10 @@
         "voucherCode": {
           "type": "string",
           "maxLength": 30
+        },
+        "etimsControlNumber": {
+          "type": "string",
+          "maxLength": 64
         },
         "createdAt": {
           "type": "string",
@@ -183,6 +191,39 @@
         }
       },
       "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "CatalogOverride": {
+      "title": "Live Catalog Price & Inventory Override",
+      "description": "Admin-managed live price and stock override for catalog machinery.",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "priceKes": {
+          "type": "number"
+        },
+        "inStock": {
+          "type": "boolean"
+        },
+        "stockCount": {
+          "type": "integer"
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["productId", "priceKes", "inStock", "stockCount", "updatedBy", "updatedAt"]
     }
   },
   "firestore": {
@@ -192,7 +233,7 @@
     },
     "/users/{userId}/private/{docId}": {
       "schema": { "$ref": "#/entities/UserPrivateInfo" },
-      "description": "Isolated private PII subcollection (`info` document) readable and writable only by owner."
+      "description": "Isolated private PII subcollection (`info` document) readable and writable only by owner and admins."
     },
     "/users/{userId}/orders/{orderId}": {
       "schema": { "$ref": "#/entities/UserOrder" },
@@ -201,6 +242,10 @@
     "/admins/{adminId}": {
       "schema": { "$ref": "#/entities/AdminAccount" },
       "description": "Admin authorization registry; users cannot self-assign admin status."
+    },
+    "/catalogOverrides/{productId}": {
+      "schema": { "$ref": "#/entities/CatalogOverride" },
+      "description": "Publicly readable live inventory & price overrides writable only by verified admins."
     }
   }
 }

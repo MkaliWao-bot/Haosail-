@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, RotateCcw, Wrench } from 'lucide-react';
+import { Send, X, RotateCcw, Wrench, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../types/machinery';
 
 interface GeminiAdvisorModalProps {
@@ -31,6 +31,7 @@ export const GeminiAdvisorModal: React.FC<GeminiAdvisorModalProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +56,7 @@ export const GeminiAdvisorModal: React.FC<GeminiAdvisorModalProps> = ({
     const newHistory = [...messages, userMsg];
     setMessages(newHistory);
     setInput('');
+    setApiError(null);
     setIsLoading(true);
 
     try {
@@ -71,40 +73,28 @@ export const GeminiAdvisorModal: React.FC<GeminiAdvisorModalProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Technical desk unavailable');
+      const data = (await response.json().catch(() => ({}))) as {
+        reply?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data?.reply) {
+        throw new Error(data?.error || `Technical desk unavailable (HTTP ${response.status}).`);
       }
 
-      const data = await response.json();
       const assistantMsg: ChatMessage = {
         id: `desk-${Date.now()}`,
         role: 'assistant',
-        content:
-          data.reply ||
-          'Verify full-load amperage against your workshop distribution board and ensure dedicated breaker protection for continuous inductive motor loads.',
+        content: data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages([...newHistory, assistantMsg]);
-    } catch {
-      const q = text.toLowerCase();
-      const fallbackReply =
-        q.includes('cfm') || q.includes('dust') || q.includes('ps3200')
-          ? 'For the HS-PS3200-SLD Sliding Table Panel Saw (5.5 kW main motor + 0.75 kW scoring unit), pair with the HS-DC2000-BLU Industrial Dust Collector (2.2 kW twin-bag unit) using 100 mm + 60 mm Y-branch rigid ducting to keep scoring kerfs clean.'
-          : q.includes('lift') || q.includes('2pl') || q.includes('slab')
-          ? 'The HS-2PL4000-CLR 4.0-Tonne Clear-Floor Two-Post Lift requires a minimum 150 mm C25/30 reinforced concrete slab cured for 28 days, 3,850 mm clear overhead ceiling height, and 20 mm M18 chemical/expansion anchors torqued to spec.'
-          : q.includes('230v') || q.includes('3-phase') || q.includes('phase') || q.includes('th500')
-          ? 'For heavy inductive loads above 4.0 kW (such as the HS-TH500-PLN 20" Thicknesser or HS-CNC1325-PRO Router), 3-Phase 400V / 50Hz reduces per-phase current draw by ~58%, keeps cables cooler, and supports dedicated C-curve MCBs or soft-start contactors.'
-          : q.includes('generator') || q.includes('sg20')
-          ? 'The HS-SG20-CAN 20 kVA Soundproof Diesel Generator provides 16 kW prime 3-phase/single-phase output at 68 dBA. When sizing for inductive motors (compressors, panel saws), allow 2.5x–3x starting inrush headroom unless the machine uses a VFD soft-starter.'
-          : 'HaoSail Kenya stocks 68 industrial machines across Woodworking, Auto Service, Welding & Metalworking, Construction, and Workshop Lifting & Power Tools. Share your workshop supply voltage (230V 1-Phase or 400V 3-Phase) and target output for specific SKU recommendations.';
-
-      const fallbackMsg: ChatMessage = {
-        id: `desk-${Date.now()}`,
-        role: 'assistant',
-        content: fallbackReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages([...newHistory, fallbackMsg]);
+    } catch (err: unknown) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to reach HaoSail Technical Desk API. Please retry.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -112,6 +102,7 @@ export const GeminiAdvisorModal: React.FC<GeminiAdvisorModalProps> = ({
 
   const handleReset = () => {
     setMessages(INITIAL_MESSAGES);
+    setApiError(null);
   };
 
   if (!isOpen) return null;
@@ -206,6 +197,13 @@ export const GeminiAdvisorModal: React.FC<GeminiAdvisorModalProps> = ({
               <div className="rounded-lg border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] px-4 py-3 text-xs text-[#5A606B] dark:text-slate-400">
                 <span className="font-mono text-[11px]">Checking machine specifications...</span>
               </div>
+            </div>
+          )}
+
+          {apiError && (
+            <div className="flex items-start gap-2.5 rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="flex-1">{apiError}</div>
             </div>
           )}
           <div ref={messagesEndRef} />

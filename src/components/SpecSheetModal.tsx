@@ -14,6 +14,7 @@ import { Product } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
 import { HaoSailLogo } from './HaoSailLogo';
 import { KENYAN_COUNTY_HUBS } from '../data/accessoryData';
+import { STORE_CONFIG } from '../config/storeConfig';
 import { buildProductWhatsAppUrl } from '../utils/whatsapp';
 
 interface SpecSheetModalProps {
@@ -142,7 +143,7 @@ export const SpecSheetModal: React.FC<SpecSheetModalProps> = ({
                 HAOSAIL INDUSTRIAL KENYA LIMITED · TECHNICAL ENGINEERING DESK
               </p>
               <p className="text-[11px] text-[#5A606B] dark:text-slate-400 mt-0.5 print:text-slate-600">
-                Plot 48, Enterprise Road, Industrial Area, Nairobi · +254 700 000 000
+                {STORE_CONFIG.yardAddress} · {STORE_CONFIG.salesPhoneDisplay}
               </p>
             </div>
 

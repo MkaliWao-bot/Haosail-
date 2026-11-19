@@ -13,8 +13,10 @@ import {
 import {
   collection,
   collectionGroup,
+  deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -56,12 +58,35 @@ export interface UserOrderRecord {
   countyId: string;
   deliveryMode: 'direct-site' | 'depot-pickup';
   settlementMode: 'full' | 'lipa-pole-pole';
+  paymentMethod?: 'mpesa' | 'bank-wire' | 'lpo-credit' | 'depot-pay';
   status: 'confirmed' | 'dispatched' | 'completed';
   totalAmountKes: number;
   itemCount: number;
   itemsSummary: string;
   voucherCode?: string;
+  etimsControlNumber?: string;
   createdAt?: Timestamp;
+}
+
+export interface AdminUserRecord {
+  uid: string;
+  email: string;
+  grantedBy: string;
+  createdAt?: Timestamp;
+}
+
+export interface SaveOrderInput {
+  orderId: string;
+  companyName?: string;
+  countyId: string;
+  deliveryMode: 'direct-site' | 'depot-pickup';
+  settlementMode: 'full' | 'lipa-pole-pole';
+  paymentMethod?: 'mpesa' | 'bank-wire' | 'lpo-credit' | 'depot-pay';
+  totalAmountKes: number;
+  itemCount: number;
+  itemsSummary: string;
+  voucherCode?: string;
+  etimsControlNumber?: string;
 }
 
 interface AuthContextValue {
@@ -69,12 +94,14 @@ interface AuthContextValue {
   isAuthReady: boolean;
   isSigningIn: boolean;
   isAdmin: boolean;
+  isBootstrappedAdmin: boolean;
   authError: string | null;
   authNotice: string | null;
   accountProfile: UserAccountData | null;
   privateInfo: UserPrivateData | null;
   userOrders: UserOrderRecord[];
   allOrders: UserOrderRecord[];
+  adminUsers: AdminUserRecord[];
   clearAuthError: () => void;
   clearAuthNotice: () => void;
   signInWithGoogle: () => Promise<boolean>;
@@ -97,22 +124,24 @@ interface AuthContextValue {
     address: string;
     preferredCountyId: string;
   }) => Promise<void>;
-  saveOrderToAccount: (order: {
-    orderId: string;
-    companyName?: string;
-    countyId: string;
-    deliveryMode: 'direct-site' | 'depot-pickup';
-    settlementMode: 'full' | 'lipa-pole-pole';
-    totalAmountKes: number;
-    itemCount: number;
-    itemsSummary: string;
-    voucherCode?: string;
-  }) => Promise<void>;
+  saveOrderToAccount: (order: SaveOrderInput) => Promise<{ ok: boolean; error?: string }>;
   adminUpdateOrderStatus: (
     targetUserId: string,
     orderId: string,
-    nextStatus: 'confirmed' | 'dispatched' | 'completed'
-  ) => Promise<void>;
+    nextStatus: 'confirmed' | 'dispatched' | 'completed',
+    notifyContext?: {
+      etimsControlNumber?: string;
+      countyName?: string;
+      totalAmountKes?: number;
+      itemsSummary?: string;
+    }
+  ) => Promise<{ emailSent: boolean; emailReason?: string }>;
+  loadBuyerDetailsForAdmin: (targetUserId: string) => Promise<{
+    account: UserAccountData | null;
+    privateInfo: UserPrivateData | null;
+  }>;
+  grantAdminAccess: (targetUid: string, email: string) => Promise<{ ok: boolean; error?: string }>;
+  revokeAdminAccess: (targetUid: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -157,7 +186,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [privateInfo, setPrivateInfo] = useState<UserPrivateData | null>(null);
   const [userOrders, setUserOrders] = useState<UserOrderRecord[]>([]);
   const [allOrders, setAllOrders] = useState<UserOrderRecord[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUserRecord[]>([]);
   const [verificationTick, setVerificationTick] = useState(0);
+
+  const isBootstrappedAdmin = Boolean(
+    user?.emailVerified && (user.email || '').toLowerCase() === BOOTSTRAP_ADMIN_EMAIL
+  );
 
   const pendingWorkshopRef = useRef<string>('');
 
@@ -243,6 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPrivateInfo(null);
         setUserOrders([]);
         setAllOrders([]);
+        setAdminUsers([]);
         return;
       }
 
@@ -252,10 +287,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPrivateInfo(null);
         setUserOrders([]);
         setAllOrders([]);
+        setAdminUsers([]);
         return;
       }
 
-      await ensureUserDocuments(firebaseUser);
+      try {
+        await ensureUserDocuments(firebaseUser);
+      } catch (err: unknown) {
+        setAuthError(
+          err instanceof Error
+            ? 'Unable to sync workshop account with Firestore. Please retry.'
+            : 'Unable to sync workshop account.'
+        );
+      }
     });
 
     return () => unsubscribe();
@@ -291,7 +335,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const ordersQuery = query(
       collection(db, 'users', user.uid, 'orders'),
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      limit(200)
     );
 
     const unsubOrders = onSnapshot(
@@ -309,8 +354,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     let unsubAllOrders: (() => void) | undefined;
+    let unsubAdmins: (() => void) | undefined;
     if ((user.email || '').toLowerCase() === BOOTSTRAP_ADMIN_EMAIL) {
-      const adminOrdersQuery = query(collectionGroup(db, 'orders'));
+      const adminOrdersQuery = query(collectionGroup(db, 'orders'), limit(500));
       unsubAllOrders = onSnapshot(
         adminOrdersQuery,
         (snapshot) => {
@@ -324,8 +370,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (error) => handleFirestoreError(error, OperationType.LIST, 'orders')
       );
+
+      const adminsQuery = query(collection(db, 'admins'), limit(200));
+      unsubAdmins = onSnapshot(
+        adminsQuery,
+        (snapshot) => {
+          setAdminUsers(snapshot.docs.map((d) => d.data() as AdminUserRecord));
+        },
+        (error) => handleFirestoreError(error, OperationType.LIST, 'admins')
+      );
     } else {
       setAllOrders([]);
+      setAdminUsers([]);
     }
 
     return () => {
@@ -333,6 +389,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubPrivate();
       unsubOrders();
       if (unsubAllOrders) unsubAllOrders();
+      if (unsubAdmins) unsubAdmins();
     };
   }, [isAuthReady, user, verificationTick]);
 
@@ -508,21 +565,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const saveOrderToAccount = async (order: {
-    orderId: string;
-    companyName?: string;
-    countyId: string;
-    deliveryMode: 'direct-site' | 'depot-pickup';
-    settlementMode: 'full' | 'lipa-pole-pole';
-    totalAmountKes: number;
-    itemCount: number;
-    itemsSummary: string;
-    voucherCode?: string;
-  }) => {
-    if (!user || !user.emailVerified) return;
+  const saveOrderToAccount = async (
+    order: SaveOrderInput
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!user || !user.emailVerified) {
+      return { ok: false, error: 'Sign in with a verified email to save orders to your account.' };
+    }
 
     const cleanOrderId = order.orderId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
-    if (cleanOrderId.length < 4) return;
+    if (cleanOrderId.length < 4) {
+      return { ok: false, error: 'Invalid order reference generated.' };
+    }
 
     const safeCounty = COUNTY_PATTERN.test(order.countyId)
       ? order.countyId.slice(0, 40)
@@ -531,6 +584,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       order.itemsSummary.trim().slice(0, 500) || 'HaoSail Equipment Order';
     const safeCompany = (order.companyName || '').trim().slice(0, 120);
     const safeVoucher = (order.voucherCode || '').trim().slice(0, 30);
+    const safeEtims = (order.etimsControlNumber || '').trim().slice(0, 64);
 
     const path = `users/${user.uid}/orders/${cleanOrderId}`;
     try {
@@ -541,25 +595,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         countyId: safeCounty,
         deliveryMode: order.deliveryMode,
         settlementMode: order.settlementMode,
+        ...(order.paymentMethod ? { paymentMethod: order.paymentMethod } : {}),
         status: 'confirmed',
         totalAmountKes: Math.max(0, Math.round(order.totalAmountKes)),
         itemCount: Math.max(1, Math.min(500, Math.round(order.itemCount))),
         itemsSummary: safeItemsSummary,
         ...(safeVoucher ? { voucherCode: safeVoucher } : {}),
+        ...(safeEtims ? { etimsControlNumber: safeEtims } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      return { ok: true };
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      try {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      } catch (wrapped) {
+        return {
+          ok: false,
+          error:
+            wrapped instanceof Error
+              ? 'Could not sync order to Firestore. Please check your connection and retry.'
+              : 'Order sync failed.',
+        };
+      }
+      return { ok: false, error: 'Order sync failed.' };
     }
+  };
+
+  const loadBuyerDetailsForAdmin = async (targetUserId: string) => {
+    if (!user || !user.emailVerified || !isAdmin) {
+      return { account: null, privateInfo: null };
+    }
+
+    let account: UserAccountData | null = null;
+    let buyerPrivate: UserPrivateData | null = null;
+
+    try {
+      const accountSnap = await getDoc(doc(db, 'users', targetUserId));
+      if (accountSnap.exists()) {
+        account = accountSnap.data() as UserAccountData;
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `users/${targetUserId}`);
+    }
+
+    try {
+      const privSnap = await getDoc(doc(db, 'users', targetUserId, 'private', 'info'));
+      if (privSnap.exists()) {
+        buyerPrivate = privSnap.data() as UserPrivateData;
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `users/${targetUserId}/private/info`);
+    }
+
+    return { account, privateInfo: buyerPrivate };
   };
 
   const adminUpdateOrderStatus = async (
     targetUserId: string,
     orderId: string,
-    nextStatus: 'confirmed' | 'dispatched' | 'completed'
-  ) => {
-    if (!user || !user.emailVerified || !isAdmin) return;
+    nextStatus: 'confirmed' | 'dispatched' | 'completed',
+    notifyContext?: {
+      etimsControlNumber?: string;
+      countyName?: string;
+      totalAmountKes?: number;
+      itemsSummary?: string;
+    }
+  ): Promise<{ emailSent: boolean; emailReason?: string }> => {
+    if (!user || !user.emailVerified || !isAdmin) {
+      return { emailSent: false, emailReason: 'Admin authorization required.' };
+    }
     const path = `users/${targetUserId}/orders/${orderId}`;
     try {
       await updateDoc(doc(db, 'users', targetUserId, 'orders', orderId), {
@@ -568,6 +673,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+
+    if (nextStatus === 'dispatched' || nextStatus === 'completed') {
+      try {
+        const buyer = await loadBuyerDetailsForAdmin(targetUserId);
+        const toEmail = (buyer.privateInfo?.email || '').trim();
+        if (!toEmail) {
+          return { emailSent: false, emailReason: 'No customer email on file for this order.' };
+        }
+        const idToken = await user.getIdToken();
+        const res = await fetch('/api/notify', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: nextStatus === 'dispatched' ? 'order_dispatched' : 'order_completed',
+            toEmail,
+            recipientName: buyer.account?.workshopName || buyer.account?.displayName,
+            orderReference: orderId,
+            etimsControlNumber: notifyContext?.etimsControlNumber,
+            countyName: notifyContext?.countyName,
+            totalAmountKes: notifyContext?.totalAmountKes,
+            itemsSummary: notifyContext?.itemsSummary,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          delivered?: boolean;
+          reason?: string;
+        };
+        return {
+          emailSent: Boolean(data.delivered),
+          emailReason: data.reason,
+        };
+      } catch {
+        return { emailSent: false, emailReason: 'Unable to reach notification service.' };
+      }
+    }
+
+    return { emailSent: false };
+  };
+
+  const grantAdminAccess = async (
+    targetUid: string,
+    email: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!user || !user.emailVerified || !isAdmin) {
+      return { ok: false, error: 'Verified Admin required.' };
+    }
+    const cleanUid = targetUid.trim();
+    const cleanEmail = email.trim().toLowerCase().slice(0, 120);
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(cleanUid)) {
+      return { ok: false, error: 'Enter a valid Firebase User UID.' };
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { ok: false, error: 'Enter a valid staff email address.' };
+    }
+    try {
+      await setDoc(doc(db, 'admins', cleanUid), {
+        uid: cleanUid,
+        email: cleanEmail,
+        grantedBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      return { ok: true };
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `admins/${cleanUid}`);
+      } catch {
+        return { ok: false, error: 'Unable to grant admin permissions.' };
+      }
+      return { ok: false, error: 'Unable to grant admin permissions.' };
+    }
+  };
+
+  const revokeAdminAccess = async (targetUid: string): Promise<{ ok: boolean; error?: string }> => {
+    if (!user || !user.emailVerified || !isAdmin) {
+      return { ok: false, error: 'Verified Admin required.' };
+    }
+    const cleanUid = targetUid.trim();
+    if (!cleanUid || cleanUid === user.uid) {
+      return { ok: false, error: 'Cannot revoke active root session.' };
+    }
+    try {
+      await deleteDoc(doc(db, 'admins', cleanUid));
+      return { ok: true };
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.DELETE, `admins/${cleanUid}`);
+      } catch {
+        return { ok: false, error: 'Unable to revoke admin access.' };
+      }
+      return { ok: false, error: 'Unable to revoke admin access.' };
     }
   };
 
@@ -578,12 +777,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthReady,
         isSigningIn,
         isAdmin,
+        isBootstrappedAdmin,
         authError,
         authNotice,
         accountProfile,
         privateInfo,
         userOrders,
         allOrders,
+        adminUsers,
         clearAuthError: () => setAuthError(null),
         clearAuthNotice: () => setAuthNotice(null),
         signInWithGoogle,
@@ -596,6 +797,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateWorkshopDetails,
         saveOrderToAccount,
         adminUpdateOrderStatus,
+        loadBuyerDetailsForAdmin,
+        grantAdminAccess,
+        revokeAdminAccess,
       }}
     >
       {children}
