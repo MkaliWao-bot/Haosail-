@@ -1,45 +1,44 @@
 import { Product } from '../types/machinery';
 
-import cncRouterImg from '../assets/images/kenyan_cnc_router_1794916640703.jpg';
-import edgeBanderImg from '../assets/images/automatic_edge_bander_1792571129104.jpg';
-import panelSawImg from '../assets/images/kenyan_panel_saw_1794916640669.jpg';
+import cncRouterImg from '../assets/images/prod_cnc_router_1795531126220.jpg';
+import panelSawImg from '../assets/images/prod_panel_saw_1795531127577.jpg';
 import twoPostLiftImg from '../assets/images/two_post_lift_1792571126549.jpg';
 import wheelAlignmentImg from '../assets/images/wheel_alignment_station_1792571127652.jpg';
 import tyreChangerImg from '../assets/images/tyre_changer_1792571649391.jpg';
-import wheelBalancerImg from '../assets/images/kenyan_wheel_balancer_clean_1794916778681.jpg';
-import fourPostLiftImg from '../assets/images/kenyan_four_post_1794916640299.jpg';
-import shopPressImg from '../assets/images/kenyan_shop_press_1794916650988.jpg';
+import wheelBalancerImg from '../assets/images/prod_wheel_balancer_1795531127222.jpg';
+import fourPostLiftImg from '../assets/images/prod_four_post_lift_1795531127667.jpg';
+import shopPressImg from '../assets/images/prod_shop_press_1795531127637.jpg';
 import greasePumpImg from '../assets/images/pneumatic_grease_pump_1792571650905.jpg';
-import sprayBoothImg from '../assets/images/kenyan_spray_booth_1794916645926.jpg';
-import roadRollerImg from '../assets/images/kenyan_road_roller_1794916640887.jpg';
+import sprayBoothImg from '../assets/images/prod_spray_booth_1795531128923.jpg';
+import roadRollerImg from '../assets/images/double_drum_roller_1792757863412.jpg';
 import concreteMixerImg from '../assets/images/concrete_mixer_1792572418541.jpg';
-import bandSawMillImg from '../assets/images/kenyan_band_sawmill_1794916649992.jpg';
-import woodworkingMillerImg from '../assets/images/kenyan_wood_miller_1794916651320.jpg';
-import palletTruckImg from '../assets/images/kenyan_pallet_truck_1794916647071.jpg';
-import woodThicknesserImg from '../assets/images/kenyan_wood_thicknesser_1794916644902.jpg';
-import plateCompactorImg from '../assets/images/kenyan_plate_compactor_1794916641947.jpg';
-import tampingRammerImg from '../assets/images/kenyan_tamping_rammer_1794916643433.jpg';
-import floorGrinderImg from '../assets/images/kenyan_floor_grinder_1794916644915.jpg';
-import dustCollectorImg from '../assets/images/kenyan_dust_collector_1794916651509.jpg';
+import bandSawMillImg from '../assets/images/prod_band_sawmill_1795531131094.jpg';
+import woodworkingMillerImg from '../assets/images/prod_wood_miller_1795531131011.jpg';
+import palletTruckImg from '../assets/images/prod_pallet_truck_1795531131898.jpg';
+import woodThicknesserImg from '../assets/images/prod_wood_thicknesser_1795531130905.jpg';
+import plateCompactorImg from '../assets/images/prod_plate_compactor_1795531211267.jpg';
+import tampingRammerImg from '../assets/images/prod_tamping_rammer_1795531148782.jpg';
+import floorGrinderImg from '../assets/images/prod_floor_grinder_1795531148978.jpg';
+import dustCollectorImg from '../assets/images/prod_dust_collector_1795531149743.jpg';
 import bladeSharpenerImg from '../assets/images/blade_sharpener_workshop_1793720786002.jpg';
-import workshopCircularSawImg from '../assets/images/kenyan_circular_saw_1794916645018.jpg';
+import workshopCircularSawImg from '../assets/images/prod_circular_saw_1795531210515.jpg';
 import woodworkingBandsawImg from '../assets/images/woodworking_bandsaw_1792573138226.jpg';
 import planerThicknesserComboImg from '../assets/images/planer_thicknesser_combo_1792573138532.jpg';
 import chiselMortiserImg from '../assets/images/chisel_mortiser_1792573364247.jpg';
 import wetDryVacuumImg from '../assets/images/wet_dry_vac_workshop_1793866988006.jpg';
-import powerTrowelImg from '../assets/images/kenyan_power_trowel_1794916643193.jpg';
+import powerTrowelImg from '../assets/images/prod_power_trowel_1795531211447.jpg';
 import concreteVibratorImg from '../assets/images/concrete_vibrator_1792573364085.jpg';
-import foamMachineImg from '../assets/images/kenyan_foam_machine_1794916651015.jpg';
-import oilDrainerImg from '../assets/images/kenyan_oil_drainer_1794916650593.jpg';
-import airInflatorImg from '../assets/images/kenyan_air_inflator_1794916657300.jpg';
-import airCompressorImg from '../assets/images/kenyan_air_compressor_1794916652360.jpg';
-import toolboxCartImg from '../assets/images/kenyan_toolbox_cart_1794916652604.jpg';
-import girderCorrectorImg from '../assets/images/kenyan_girder_corrector_1794916645838.jpg';
+import foamMachineImg from '../assets/images/prod_foam_machine_1795531212010.jpg';
+import oilDrainerImg from '../assets/images/prod_oil_drainer_1795531212605.jpg';
+import airInflatorImg from '../assets/images/prod_tire_inflator_studio_1795533314299.jpg';
+import airCompressorImg from '../assets/images/prod_air_compressor_1795531214485.jpg';
+import toolboxCartImg from '../assets/images/prod_toolbox_cart_1795531215123.jpg';
+import girderCorrectorImg from '../assets/images/prod_girder_corrector_1795531215262.jpg';
 import gasPressureWasherImg from '../assets/images/gas_pressure_washer_site_1793866970262.jpg';
-import electricPressureWasherImg from '../assets/images/kenyan_pressure_washer_1794916647680.jpg';
-import vulcanizerMachineImg from '../assets/images/kenyan_vulcanizer_shop_1794916653568.jpg';
-import gasGeneratorImg from '../assets/images/kenyan_gas_generator_1794916648704.jpg';
-import dieselGenOpenImg from '../assets/images/kenyan_diesel_generator_1794916648730.jpg';
+import electricPressureWasherImg from '../assets/images/prod_electric_washer_clean.jpg';
+import vulcanizerMachineImg from '../assets/images/prod_vulcanizer_1795531308714.jpg';
+import gasGeneratorImg from '../assets/images/prod_gas_generator_1795531309121.jpg';
+import dieselGenOpenImg from '../assets/images/prod_diesel_gen_open_1795531309885.jpg';
 import dieselGenSilentImg from '../assets/images/diesel_gen_silent_canopy_1793867008550.jpg';
 
 export const ADDITIONAL_NEW_MACHINES: Product[] = [
@@ -239,8 +238,8 @@ export const ADDITIONAL_NEW_MACHINES: Product[] = [
   {
     id: 'hs-eb-1700k',
     sku: 'HS-EB500-AUTO',
-    name: 'Automatic Edge Banding Machine HaoSail EB-500',
-    subtitle: 'Full Linear Edge Bander with Gluing, End Cutting, Fine Trimming & Buffing',
+    name: 'Automatic Edge Banding Machine HaoSail DW902',
+    subtitle: 'High-Speed Linear Edge Bander with Gluing, End Cutting, Fine Trimming & Buffing',
     category: 'woodworking',
     categoryLabel: 'Woodworking Machinery',
     subCategory: 'sheet-panel',
@@ -255,7 +254,7 @@ export const ADDITIONAL_NEW_MACHINES: Product[] = [
     isFreeFreight: true,
     isPopular: true,
     powerSource: '3-phase-400v',
-    image: edgeBanderImg,
+    image: '/assets/aistudio/edge_banding_706f9075.jpeg',
     specs: {
       motor: '9.5 kW Total Connected Power',
       voltage: '400V / 3-Phase / 50Hz',
@@ -276,7 +275,7 @@ export const ADDITIONAL_NEW_MACHINES: Product[] = [
       'Dual cotton buffing wheels for mirror edge finishing on PVC and acrylic tapes'
     ],
     includedItems: [
-      'HaoSail EB-500 Edge Bander Main Unit',
+      'HaoSail DW902 High-Speed Automatic Edge Bander Main Unit',
       'Extendable Panel Support Roller Track',
       'Starter Supply of HaoSail High-Bond EVA Hot Melt Pellets',
       'Carbide Replacement Knife Inserts Set'
@@ -1534,17 +1533,17 @@ export const ADDITIONAL_NEW_MACHINES: Product[] = [
       rpm: 'Digital Microprocessor Response < 0.2s',
       dustPortSize: '1/4" High-Pressure Air Coupling with 10m Heavy Air Hose',
     },
-    description: 'High-precision wall-mounted digital tyre inflation station designed for commercial petrol stations, tyre fitment centers, and fleet depots. Technicians key in the desired PSI or Bar, clamp the chuck, and the unit automatically inflates or deflates with acoustic beep completion.',
+    description: 'Compact wall-mounted digital automatic tyre inflation unit designed for commercial garages, tyre fitment bays, petrol stations, and fleet depots. Operators set the target pressure using tactile + and - stainless buttons, connect the air chuck, and the unit automatically inflates or deflates until completion with an audible beep.',
     features: [
-      'High-luminance large LED digital readout visible in direct outdoor sunlight',
-      'Over-pressure cycle purge mode for seating new tyre beads automatically',
-      'Vandal-resistant IP65 aluminum die-cast housing built for outdoor weather exposure',
-      'Includes 10-metre heavy rubber airline hose with clip-on open-ended tyre chuck'
+      'Clear backlit LCD readout with rugged stainless + / - target pressure preset buttons',
+      'Dedicated FILL override button commences inflation safely on zero-pressure flat tyres',
+      'Audible completion beep alerts technicians immediately when preset tyre pressure is reached',
+      'Compact sealed wall-mount enclosure with heavy rubber air hose and twin-head tyre chuck'
     ],
     includedItems: [
-      'AG-150 Digital Wall Station with Aluminum Enclosure',
-      '10-Metre Commercial Airline Hose with Lock-On Brass Chuck',
-      'Wall Mounting Bracket and Hardware Set',
+      'HaoSail AG-150 Wall-Mount Automatic Digital Tire Inflator Unit',
+      '10-Metre Commercial Rubber Air Hose with Dual-Foot Tyre Chuck',
+      '230V Power Lead & Wall Mounting Hardware Set',
       'Factory Pressure Calibration Certificate'
     ]
   },

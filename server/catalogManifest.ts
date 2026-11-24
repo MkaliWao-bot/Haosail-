@@ -42,7 +42,7 @@ export const SERVER_CATALOG_ITEMS: Record<string, ServerCatalogItem> = {
   "hs-eb-1700k": {
     "id": "hs-eb-1700k",
     "sku": "HS-EB500-AUTO",
-    "name": "Automatic Edge Banding Machine HaoSail EB-500",
+    "name": "Automatic Edge Banding Machine HaoSail DW902",
     "price": 1700000
   },
   "hs-pt-29k": {

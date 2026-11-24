@@ -1,18 +1,18 @@
 import { Category } from '../types/machinery';
-import circularSawAccImg from '../assets/images/kenyan_circular_saw_1794916645018.jpg';
-import dustHoseAccImg from '../assets/images/kenyan_dust_collector_1794916651509.jpg';
-import planerAccImg from '../assets/images/kenyan_wood_thicknesser_1794916644902.jpg';
-import oilAccImg from '../assets/images/kenyan_oil_drainer_1794916650593.jpg';
+import circularSawAccImg from '../assets/images/prod_circular_saw_1795531210515.jpg';
+import dustHoseAccImg from '../assets/images/prod_dust_collector_1795531149743.jpg';
+import planerAccImg from '../assets/images/prod_wood_thicknesser_1795531130905.jpg';
+import oilAccImg from '../assets/images/prod_oil_drainer_1795531212605.jpg';
 import twoPostAccImg from '../assets/images/two_post_lift_1792571126549.jpg';
-import airInflatorAccImg from '../assets/images/kenyan_air_inflator_1794916657300.jpg';
-import welderAccImg from '../assets/images/kenyan_arc_welder_1794998103465.jpg';
-import migAccImg from '../assets/images/kenyan_mig_welder_1794998103841.jpg';
-import latheAccImg from '../assets/images/kenyan_metal_lathe_1794998105057.jpg';
-import compactorAccImg from '../assets/images/kenyan_plate_compactor_1794916641947.jpg';
-import roadCutterAccImg from '../assets/images/kenyan_road_cutter_1794998106727.jpg';
+import airInflatorAccImg from '../assets/images/prod_tire_inflator_studio_1795533314299.jpg';
+import welderAccImg from '../assets/images/prod_arc_welder_1795531392081.jpg';
+import migAccImg from '../assets/images/prod_mig_welder_1795531392807.jpg';
+import latheAccImg from '../assets/images/prod_metal_lathe_1795531394319.jpg';
+import compactorAccImg from '../assets/images/prod_plate_compactor_1795531211267.jpg';
+import roadCutterAccImg from '../assets/images/prod_road_cutter_1795531481113.jpg';
 import pokerAccImg from '../assets/images/concrete_vibrator_1792573364085.jpg';
-import pressAccImg from '../assets/images/kenyan_shop_press_1794916650988.jpg';
-import toolsetAccImg from '../assets/images/kenyan_mechanic_toolset_1794998102227.jpg';
+import pressAccImg from '../assets/images/prod_shop_press_1795531127637.jpg';
+import toolsetAccImg from '../assets/images/prod_mechanic_toolset_1795531391393.jpg';
 
 export interface AccessoryItem {
   id: string;
