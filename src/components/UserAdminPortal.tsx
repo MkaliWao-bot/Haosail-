@@ -25,6 +25,11 @@ import {
   Search,
   Menu,
   X,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Mail,
+  Clock,
 } from 'lucide-react';
 import {
   BOOTSTRAP_ADMIN_EMAIL,
@@ -86,12 +91,15 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
     userOrders,
     allOrders,
     adminUsers,
+    adminInvites,
     signOutUser,
     updateWorkshopDetails,
     adminUpdateOrderStatus,
     loadBuyerDetailsForAdmin,
     grantAdminAccess,
     revokeAdminAccess,
+    inviteStaffAdmin,
+    revokeStaffInvite,
   } = useAuth();
 
   const {
@@ -172,9 +180,17 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
   const [editingCustomProduct, setEditingCustomProduct] = useState<Product | null>(null);
 
   // Staff Registry state
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteStaffName, setInviteStaffName] = useState('');
+  const [inviteRoleLabel, setInviteRoleLabel] = useState('Yard Dispatch & Orders');
+  const [isInvitingStaff, setIsInvitingStaff] = useState(false);
+  const [showUidFallback, setShowUidFallback] = useState(false);
   const [newAdminUid, setNewAdminUid] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminRole, setNewAdminRole] = useState('');
   const [staffStatusMsg, setStaffStatusMsg] = useState<string | null>(null);
+  const [copiedItemKey, setCopiedItemKey] = useState<string | null>(null);
 
   // Escape handler
   useEffect(() => {
@@ -580,15 +596,97 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
     return res;
   };
 
+  const handleCopyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedItemKey(key);
+      window.setTimeout(() => {
+        setCopiedItemKey((prev) => (prev === key ? null : prev));
+      }, 2200);
+    } catch {
+      setAdminActionError('Clipboard permission unavailable in this browser.');
+    }
+  };
+
+  const handleInviteStaffByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminActionError(null);
+    setStaffStatusMsg(null);
+    setIsInvitingStaff(true);
+    try {
+      const targetEmail = inviteEmail.trim().toLowerCase();
+      const res = await inviteStaffAdmin({
+        email: targetEmail,
+        staffName: inviteStaffName,
+        roleLabel: inviteRoleLabel,
+      });
+      if (res.ok) {
+        setStaffStatusMsg(
+          `Staff invitation queued for ${targetEmail}. As soon as they sign in with that verified email (Google or Email/Password), their Admin Console activates automatically.`
+        );
+        setInviteEmail('');
+        setInviteStaffName('');
+      } else {
+        setAdminActionError(res.error || 'Unable to create staff invitation.');
+      }
+    } finally {
+      setIsInvitingStaff(false);
+    }
+  };
+
+  const handleRevokeStaffInvite = async (inviteId: string, email: string) => {
+    setAdminActionError(null);
+    setStaffStatusMsg(null);
+    const res = await revokeStaffInvite(inviteId);
+    if (res.ok) {
+      setStaffStatusMsg(`Revoked pending invitation for ${email}.`);
+    } else {
+      setAdminActionError(res.error || 'Unable to revoke invitation.');
+    }
+  };
+
+  const handleReinviteRevokedStaff = async (
+    email: string,
+    staffName?: string,
+    roleLabel?: string
+  ) => {
+    setAdminActionError(null);
+    setStaffStatusMsg(null);
+    const res = await inviteStaffAdmin({ email, staffName, roleLabel });
+    if (res.ok) {
+      setStaffStatusMsg(`Re-activated staff invitation for ${email}.`);
+    } else {
+      setAdminActionError(res.error || 'Unable to re-invite staff member.');
+    }
+  };
+
+  const handleRevokeActiveAdmin = async (uid: string, email: string) => {
+    setAdminActionError(null);
+    setStaffStatusMsg(null);
+    const res = await revokeAdminAccess(uid);
+    if (res.ok) {
+      setStaffStatusMsg(`Revoked Staff Admin privileges for ${email}.`);
+    } else {
+      setAdminActionError(res.error || 'Unable to revoke admin access.');
+    }
+  };
+
   const handleGrantAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminActionError(null);
     setStaffStatusMsg(null);
-    const res = await grantAdminAccess(newAdminUid, newAdminEmail);
+    const res = await grantAdminAccess(
+      newAdminUid,
+      newAdminEmail,
+      newAdminName,
+      newAdminRole
+    );
     if (res.ok) {
-      setStaffStatusMsg(`Staff admin privileges granted to ${newAdminEmail.trim()}.`);
+      setStaffStatusMsg(`Staff admin privileges granted directly to ${newAdminEmail.trim()}.`);
       setNewAdminUid('');
       setNewAdminEmail('');
+      setNewAdminName('');
+      setNewAdminRole('');
     } else {
       setAdminActionError(res.error || 'Unable to grant admin privileges.');
     }
@@ -978,13 +1076,35 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
               {/* 1. WORKSHOP PROFILE TAB */}
               {activeTab === 'profile' && (
                 <section className="rounded-lg border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] p-6 sm:p-8">
-                  <div className="border-b border-[#E2E4E8] dark:border-[#262A33] pb-4 mb-6">
-                    <h1 className="font-display text-xl font-bold text-[#111315] dark:text-white">
-                      Workshop &amp; Procurement Profile
-                    </h1>
-                    <p className="mt-1 text-xs text-[#5A606B] dark:text-slate-400">
-                      Saved details automatically pre-fill Checkout, KRA eTIMS tax invoices, and Official Quotations.
-                    </p>
+                  <div className="border-b border-[#E2E4E8] dark:border-[#262A33] pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h1 className="font-display text-xl font-bold text-[#111315] dark:text-white">
+                        Workshop &amp; Procurement Profile
+                      </h1>
+                      <p className="mt-1 text-xs text-[#5A606B] dark:text-slate-400">
+                        Saved details automatically pre-fill Checkout, KRA eTIMS tax invoices, and Official Quotations.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#0D0F12] px-2.5 py-1.5 font-mono text-[10px] text-[#5A606B] dark:text-slate-400 shrink-0">
+                      <span>Account UID: {user.uid.slice(0, 10)}…</span>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyText('profile-uid', user.uid)}
+                        className="inline-flex items-center gap-1 font-semibold text-[#004B97] dark:text-sky-400 hover:underline cursor-pointer"
+                      >
+                        {copiedItemKey === 'profile-uid' ? (
+                          <>
+                            <Check className="h-3 w-3" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <form onSubmit={handleSaveProfile} className="space-y-5 text-xs">
@@ -2046,14 +2166,14 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
 
               {/* 7. ADMIN STAFF & ACCESS CONTROL */}
               {isAdmin && activeTab === 'admin-staff' && (
-                <section className="rounded-lg border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] p-5 sm:p-6 space-y-5">
+                <section className="rounded-lg border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] p-5 sm:p-6 space-y-6">
                   <div className="border-b border-[#E2E4E8] dark:border-[#262A33] pb-4 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h1 className="font-display text-xl font-bold text-[#111315] dark:text-white">
                         Staff &amp; Dispatch Access Control
                       </h1>
                       <p className="mt-0.5 text-xs text-[#5A606B] dark:text-slate-400">
-                        Manage delegated staff administrators authorized to edit live catalog inventory and process customer orders.
+                        Invite team members by email so they can manage Orders &amp; Dispatch, Inventory &amp; Catalog, and B2B Customers.
                       </p>
                     </div>
                     <span className="font-mono text-[11px] text-[#5A606B] dark:text-slate-400">
@@ -2062,94 +2182,341 @@ export const UserAdminPortal: React.FC<UserAdminPortalProps> = ({
                   </div>
 
                   {staffStatusMsg && (
-                    <div className="rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-200">
-                      {staffStatusMsg}
+                    <div className="flex items-start gap-2 rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-200">
+                      <Check className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{staffStatusMsg}</span>
                     </div>
                   )}
                   {adminActionError && (
-                    <div className="rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
-                      {adminActionError}
+                    <div className="flex items-start gap-2 rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{adminActionError}</span>
                     </div>
                   )}
 
                   {isBootstrappedAdmin ? (
                     <>
-                      <div className="divide-y divide-[#E2E4E8] dark:divide-[#262A33] border border-[#E2E4E8] dark:border-[#262A33] rounded-md text-xs">
-                        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#F6F6F4] dark:bg-[#111318]">
-                          <div>
-                            <div className="font-semibold text-[#111315] dark:text-white">
-                              {BOOTSTRAP_ADMIN_EMAIL}
-                            </div>
-                            <div className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400">
-                              Bootstrapped Root Administrator · Immutable
-                            </div>
+                      {/* Primary Workflow: Invite Staff by Email */}
+                      <form
+                        onSubmit={handleInviteStaffByEmail}
+                        className="rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#111318] p-4 sm:p-5 space-y-3.5 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold text-[#111315] dark:text-white flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-[#004B97] dark:text-sky-400" />
+                            <span>Invite Staff Member by Email</span>
                           </div>
-                          <span className="font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
-                            Active Root
+                          <span className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400">
+                            Auto-activates on verified sign-in
                           </span>
                         </div>
 
-                        {adminUsers.map((adm) => (
-                          <div
-                            key={adm.uid}
-                            className="flex items-center justify-between gap-3 px-4 py-3"
-                          >
-                            <div className="min-w-0">
-                              <div className="font-semibold text-[#111315] dark:text-white truncate">
-                                {adm.email}
-                              </div>
-                              <div className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400 truncate">
-                                UID: {adm.uid}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => void revokeAdminAccess(adm.uid)}
-                              className="inline-flex items-center gap-1 font-mono text-[11px] text-rose-600 dark:text-rose-400 hover:underline cursor-pointer shrink-0"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Revoke</span>
-                            </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                          <div className="sm:col-span-5">
+                            <label className="block text-[11px] font-medium text-[#5A606B] dark:text-slate-300 mb-1">
+                              Staff Email Address *
+                            </label>
+                            <input
+                              type="email"
+                              required
+                              maxLength={120}
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              placeholder="grace.wanjiku@company.co.ke"
+                              className="w-full rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                            />
                           </div>
-                        ))}
-                      </div>
-
-                      <form
-                        onSubmit={handleGrantAdmin}
-                        className="rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#111318] p-4 space-y-3 text-xs"
-                      >
-                        <div className="font-semibold text-[#111315] dark:text-white flex items-center gap-1.5">
-                          <UserPlus className="h-4 w-4 text-[#004B97] dark:text-sky-400" />
-                          <span>Grant Staff Dispatch Privileges</span>
+                          <div className="sm:col-span-3">
+                            <label className="block text-[11px] font-medium text-[#5A606B] dark:text-slate-300 mb-1">
+                              Full Name
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={100}
+                              value={inviteStaffName}
+                              onChange={(e) => setInviteStaffName(e.target.value)}
+                              placeholder="Grace Wanjiku"
+                              className="w-full rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                            />
+                          </div>
+                          <div className="sm:col-span-4">
+                            <label className="block text-[11px] font-medium text-[#5A606B] dark:text-slate-300 mb-1">
+                              Role / Desk
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={80}
+                              value={inviteRoleLabel}
+                              onChange={(e) => setInviteRoleLabel(e.target.value)}
+                              placeholder="Yard Dispatch & Orders"
+                              className="w-full rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                            />
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                          <input
-                            type="text"
-                            value={newAdminUid}
-                            onChange={(e) => setNewAdminUid(e.target.value)}
-                            placeholder="Staff Firebase User UID"
-                            className="sm:col-span-2 rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 font-mono text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
-                          />
-                          <input
-                            type="email"
-                            value={newAdminEmail}
-                            onChange={(e) => setNewAdminEmail(e.target.value)}
-                            placeholder="staff@haosail.ke"
-                            className="sm:col-span-2 rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
-                          />
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                          <p className="text-[11px] text-[#5A606B] dark:text-slate-400">
+                            Have them open <strong>Account → Admin</strong> and sign in with Google or verified Email/Password using this email.
+                          </p>
                           <button
                             type="submit"
-                            className="btn-press rounded-sm bg-[#004B97] hover:bg-[#003B78] px-4 py-2 text-xs font-semibold text-white cursor-pointer whitespace-nowrap"
+                            disabled={isInvitingStaff}
+                            className="btn-press inline-flex items-center justify-center gap-1.5 rounded-sm bg-[#004B97] hover:bg-[#003B78] px-4 py-2 text-xs font-semibold text-white cursor-pointer whitespace-nowrap disabled:opacity-60"
                           >
-                            Grant Admin
+                            <UserPlus className="h-3.5 w-3.5" />
+                            <span>{isInvitingStaff ? 'Saving Invite...' : 'Invite Staff Admin'}</span>
                           </button>
                         </div>
                       </form>
+
+                      {/* Active Administrators List */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#5A606B] dark:text-slate-400">
+                            Active Administrators ({1 + adminUsers.length})
+                          </h2>
+                        </div>
+                        <div className="divide-y divide-[#E2E4E8] dark:divide-[#262A33] border border-[#E2E4E8] dark:border-[#262A33] rounded-md text-xs">
+                          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#F6F6F4] dark:bg-[#111318]">
+                            <div>
+                              <div className="font-semibold text-[#111315] dark:text-white">
+                                {BOOTSTRAP_ADMIN_EMAIL}
+                              </div>
+                              <div className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400">
+                                Bootstrapped Root Administrator · Immutable
+                              </div>
+                            </div>
+                            <span className="font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                              Active Root
+                            </span>
+                          </div>
+
+                          {adminUsers.map((adm) => (
+                            <div
+                              key={adm.uid}
+                              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-[#111315] dark:text-white truncate">
+                                    {adm.staffName || adm.email}
+                                  </span>
+                                  {adm.roleLabel && (
+                                    <span className="font-mono text-[10px] text-[#004B97] dark:text-sky-400">
+                                      · {adm.roleLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400 truncate">
+                                  {adm.email} · UID: {adm.uid}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                  Active Staff
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRevokeActiveAdmin(adm.uid, adm.email)}
+                                  className="inline-flex items-center gap-1 font-mono text-[11px] text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span>Revoke</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pending & Historical Email Invitations */}
+                      {adminInvites.filter((inv) => inv.status !== 'claimed').length > 0 && (
+                        <div className="space-y-2">
+                          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#5A606B] dark:text-slate-400">
+                            Email Invitations Queue ({adminInvites.filter((inv) => inv.status !== 'claimed').length})
+                          </h2>
+                          <div className="divide-y divide-[#E2E4E8] dark:divide-[#262A33] border border-[#E2E4E8] dark:border-[#262A33] rounded-md text-xs">
+                            {adminInvites
+                              .filter((inv) => inv.status !== 'claimed')
+                              .map((inv) => {
+                                const portalUrl =
+                                  typeof window !== 'undefined' ? window.location.origin : '';
+                                const instructions = [
+                                  `You have been invited as Staff Admin on HaoSail Machinery Kenya.`,
+                                  `1. Open: ${portalUrl}`,
+                                  `2. Click Account -> Admin tab.`,
+                                  `3. Sign in with Google or create/verify Email & Password using: ${inv.email}`,
+                                  `Your Staff Operations, Inventory & Dispatch console activates automatically once signed in.`,
+                                ].join('\n');
+
+                                return (
+                                  <div
+                                    key={inv.inviteId}
+                                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-semibold text-[#111315] dark:text-white truncate">
+                                          {inv.staffName || inv.email}
+                                        </span>
+                                        {inv.roleLabel && (
+                                          <span className="font-mono text-[10px] text-[#5A606B] dark:text-slate-400">
+                                            · {inv.roleLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 font-mono text-[10px] text-[#5A606B] dark:text-slate-400 truncate">
+                                        <span>{inv.email}</span>
+                                        <span>·</span>
+                                        {inv.status === 'pending' ? (
+                                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
+                                            <Clock className="h-3 w-3" />
+                                            <span>Pending First Sign-In</span>
+                                          </span>
+                                        ) : (
+                                          <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                            Revoked
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      {inv.status === 'pending' ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              void handleCopyText(`inv-${inv.inviteId}`, instructions)
+                                            }
+                                            className="inline-flex items-center gap-1 rounded border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#1C2029] hover:border-[#004B97] px-2.5 py-1 font-mono text-[10px] font-semibold text-[#111315] dark:text-slate-200 cursor-pointer"
+                                          >
+                                            {copiedItemKey === `inv-${inv.inviteId}` ? (
+                                              <>
+                                                <Check className="h-3 w-3 text-emerald-600" />
+                                                <span>Copied Note</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="h-3 w-3" />
+                                                <span>Copy Invite Instructions</span>
+                                              </>
+                                            )}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              void handleRevokeStaffInvite(inv.inviteId, inv.email)
+                                            }
+                                            className="font-mono text-[11px] text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                                          >
+                                            Revoke
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void handleReinviteRevokedStaff(
+                                              inv.email,
+                                              inv.staffName,
+                                              inv.roleLabel
+                                            )
+                                          }
+                                          className="rounded border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#1C2029] hover:border-[#004B97] px-2.5 py-1 font-mono text-[10px] font-semibold text-[#004B97] dark:text-sky-400 cursor-pointer"
+                                        >
+                                          Re-Invite
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Collapsible Advanced Direct UID Fallback */}
+                      <div className="border-t border-[#E2E4E8] dark:border-[#262A33] pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowUidFallback((v) => !v)}
+                          className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white cursor-pointer"
+                        >
+                          {showUidFallback ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                          <span>Advanced: Grant Directly by Firebase UID</span>
+                        </button>
+
+                        {showUidFallback && (
+                          <form
+                            onSubmit={handleGrantAdmin}
+                            className="mt-3 rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#111318] p-4 space-y-3 text-xs"
+                          >
+                            <p className="text-[11px] text-[#5A606B] dark:text-slate-400">
+                              Use if the staff member already signed in and sent you their Account UID from Workshop Profile.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                              <input
+                                type="text"
+                                required
+                                value={newAdminUid}
+                                onChange={(e) => setNewAdminUid(e.target.value)}
+                                placeholder="Firebase User UID *"
+                                className="rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 font-mono text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                              />
+                              <input
+                                type="email"
+                                required
+                                value={newAdminEmail}
+                                onChange={(e) => setNewAdminEmail(e.target.value)}
+                                placeholder="Staff Email *"
+                                className="rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                              />
+                              <input
+                                type="text"
+                                value={newAdminName}
+                                onChange={(e) => setNewAdminName(e.target.value)}
+                                placeholder="Full Name (optional)"
+                                className="rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                              />
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={newAdminRole}
+                                  onChange={(e) => setNewAdminRole(e.target.value)}
+                                  placeholder="Role (optional)"
+                                  className="min-w-0 flex-1 rounded-sm border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#0D0F12] px-3 py-2 text-xs text-[#111315] dark:text-white focus:border-[#004B97] focus:outline-none"
+                                />
+                                <button
+                                  type="submit"
+                                  className="btn-press rounded-sm bg-[#004B97] hover:bg-[#003B78] px-3.5 py-2 text-xs font-semibold text-white cursor-pointer whitespace-nowrap"
+                                >
+                                  Grant
+                                </button>
+                              </div>
+                            </div>
+                          </form>
+                        )}
+                      </div>
                     </>
                   ) : (
-                    <p className="text-xs text-[#5A606B] dark:text-slate-400">
-                      Only the Root Administrator ({BOOTSTRAP_ADMIN_EMAIL}) can add or revoke delegated staff administrators.
-                    </p>
+                    <div className="rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#111318] p-4 space-y-2 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-[#111315] dark:text-white">
+                          Your Clearance: Active Staff Dispatch Admin
+                        </span>
+                        <span className="font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          Verified Operations Access
+                        </span>
+                      </div>
+                      <p className="text-[#5A606B] dark:text-slate-400 leading-relaxed">
+                        Signed in as <span className="font-mono font-semibold text-[#111315] dark:text-white">{user.email}</span> (UID: <span className="font-mono">{user.uid}</span>). You have full access to <strong>Overview</strong>, <strong>Orders &amp; Dispatch</strong>, <strong>Inventory &amp; Catalog</strong>, and <strong>Customers &amp; B2B</strong>. Only the Root Administrator (<span className="font-mono">{BOOTSTRAP_ADMIN_EMAIL}</span>) can invite or revoke other staff accounts.
+                      </p>
+                    </div>
                   )}
                 </section>
               )}

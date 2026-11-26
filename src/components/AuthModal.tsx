@@ -382,9 +382,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <form onSubmit={handleSignInSubmit} className="space-y-3.5 text-xs">
                 {authMode === 'admin' && (
                   <div className="rounded-md border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-3 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                    <span className="font-semibold block mb-0.5">Administrator Console Access</span>
-                    Sign in with your verified administrator email (e.g.{' '}
-                    <span className="font-mono">johndoe@gmail.com</span>) to open the full-page Operations, Inventory &amp; Dispatch console.
+                    <span className="font-semibold block mb-0.5">Administrator &amp; Invited Staff Access</span>
+                    Sign in with your verified administrator or invited staff email (e.g.{' '}
+                    <span className="font-mono">johndoe@gmail.com</span>) via Password or Google below to open the full-page Operations, Inventory &amp; Dispatch console.
                   </div>
                 )}
 

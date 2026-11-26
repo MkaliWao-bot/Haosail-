@@ -192,4 +192,32 @@ export const DIRTY_DOZEN_PAYLOADS: DirtyDozenCase[] = [
     },
     expectedResult: 'PERMISSION_DENIED',
   },
+  {
+    id: 17,
+    name: 'Non-Admin Staff Invite Creation Spoof',
+    targetPath: '/adminInvites/inv_attacker_email_hash',
+    operation: 'create',
+    uid: 'attacker_uid',
+    emailVerified: true,
+    payload: {
+      inviteId: 'inv_attacker_email_hash',
+      email: 'attacker@example.com',
+      status: 'pending',
+      invitedBy: 'attacker_uid',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
+  {
+    id: 18,
+    name: 'Cross-Email Invite Claim Attempt',
+    targetPath: '/adminInvites/inv_staff_hash',
+    operation: 'update',
+    uid: 'attacker_uid',
+    emailVerified: true,
+    payload: {
+      status: 'claimed',
+      claimedUid: 'attacker_uid',
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
 ];

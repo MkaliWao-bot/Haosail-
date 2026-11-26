@@ -9,12 +9,13 @@
 6. **Admin-Only Order Fulfillment & Terminal State Lock**: Buyers can create orders solely in `'confirmed'` status (with optional `etimsControlNumber` <= 64 chars) and cannot mutate order status to `'dispatched'` or `'completed'`. Only `isAdmin()` can update order `status`. Orders in `'completed'` status are locked against non-admin resurrection.
 7. **Strict Field Allowlisting & Query Enforcer**: Every entity checks `keys().hasAll(...)` + `keys().hasOnly(...)` on create and `diff().affectedKeys().hasOnly(...)` on update; `allow list` never invokes `get()`/`exists()` and evaluates `resource.data`.
 8. **Live Catalog Overrides & Custom Products Integrity**: `/catalogOverrides/{productId}` stores non-PII price, stock counts, and optional `archived` visibility boolean readable by visitors (`isOrderId(productId)`), while `/catalogProducts/{productId}` stores admin-added machinery models (with bounded feature/included-item lists `<= 12`). Creation, update (`priceKes` 100–50,000,000 KES, `stockCount` 0–10,000), and deletion on both catalog collections are restricted strictly to `isAdmin()`.
+9. **Atomic Email-Based Staff Invitations**: `/adminInvites/{inviteId}` can only be created or deleted by `isBootstrappedAdmin()`. Verified users may query only invites matching their own verified lowercase email (`resource.data.email == request.auth.token.email.lower()`). Claiming an invite requires an atomic batch updating `status` from `'pending'` to `'claimed'` with `claimedUid == request.auth.uid` while simultaneously creating `/admins/{request.auth.uid}` (`existsAfter` / `getAfter` invariants).
 
-## 2. The "Dirty Dozen" Attack Payloads (+ Extended Inventory/Catalog Vectors)
+## 2. The "Dirty Dozen" Attack Payloads (+ Extended Inventory & Staff Invite Vectors)
 1. **Cross-User Read/Write Spoof**: Non-admin User A (`uid: "userA"`) attempts to read or create `/users/userB/private/info`. -> Expect `PERMISSION_DENIED`.
 2. **Unverified Email/Password Bypass**: Newly registered user with `email_verified: false` writes `/users/{uid}` or admin email with `email_verified: false`. -> Expect `PERMISSION_DENIED`.
 3. **Ghost / Shadow Privilege Escalation Field**: Owner sends `{ uid, displayName, role: "admin", isAdmin: true, createdAt, updatedAt }` to `/users/{uid}`. -> Expect `PERMISSION_DENIED`.
-4. **Admin Registry Self-Grant Attack**: Non-admin user writes `{ uid: attackerUid, email, grantedBy: attackerUid, createdAt }` to `/admins/{attackerUid}`. -> Expect `PERMISSION_DENIED`.
+4. **Admin Registry Self-Grant Attack**: Non-admin user writes `{ uid: attackerUid, email, grantedBy: attackerUid, createdAt }` to `/admins/{attackerUid}` without a matching pending invite. -> Expect `PERMISSION_DENIED`.
 5. **Buyer Self-Dispatch Forgery**: Non-admin buyer updates `/users/{uid}/orders/HS-KE-123456` changing `status` to `'dispatched'` or `'completed'`. -> Expect `PERMISSION_DENIED`.
 6. **Timestamp Mutation on Update**: Owner modifies `createdAt` during a profile update. -> Expect `PERMISSION_DENIED`.
 7. **Document ID Poisoning**: Client writes `/users/{uid}/orders/${"x".repeat(500)}` with a non-matching or oversized ID (`>128` chars). -> Expect `PERMISSION_DENIED`.
@@ -25,3 +26,5 @@
 12. **Terminal State Modification by Non-Admin**: Non-admin buyer attempts to revert an order whose `existing().status == 'completed'` back to `'confirmed'`. -> Expect `PERMISSION_DENIED`.
 13. **Non-Admin Catalog Price Tampering / Product Injection**: Verified customer attempts to write `/catalogOverrides/hs-ps-575k` or create `/catalogProducts/hs-fake-100`. -> Expect `PERMISSION_DENIED`.
 14. **Out-of-Bounds Stock Count or Unbounded Array Injection**: Admin attempts negative `stockCount` (`-5`), below-floor price (`1` KES), or `features` array `> 12` entries on `/catalogProducts/{productId}`. -> Expect `PERMISSION_DENIED`.
+15. **Stolen / Mismatched Staff Invite Claim**: Verified user with email `attacker@example.com` tries to claim `/adminInvites/{inviteId}` issued for `staff@haosail.ke` or re-claim a `'revoked'` invite. -> Expect `PERMISSION_DENIED`.
+16. **Non-Atomic Invite Self-Claim**: Invited user creates `/admins/{uid}` without atomically marking `/adminInvites/{inviteId}` as `'claimed'` in the same batch. -> Expect `PERMISSION_DENIED`.

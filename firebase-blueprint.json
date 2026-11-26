@@ -179,6 +179,20 @@
           "format": "email",
           "maxLength": 120
         },
+        "staffName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "roleLabel": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "inviteId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
         "grantedBy": {
           "type": "string",
           "minLength": 1,
@@ -191,6 +205,57 @@
         }
       },
       "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "AdminInvite": {
+      "title": "Staff Administrator Email Invitation",
+      "description": "Email-based staff invitation issued by the root administrator and atomically claimed on verified sign-in.",
+      "type": "object",
+      "properties": {
+        "inviteId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120
+        },
+        "staffName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "roleLabel": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "claimed", "revoked"]
+        },
+        "invitedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "claimedUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["inviteId", "email", "status", "invitedBy", "createdAt", "updatedAt"]
     },
     "CatalogOverride": {
       "title": "Live Catalog Price, Inventory & Archive Override",
@@ -427,7 +492,11 @@
     },
     "/admins/{adminId}": {
       "schema": { "$ref": "#/entities/AdminAccount" },
-      "description": "Admin authorization registry; users cannot self-assign admin status."
+      "description": "Admin authorization registry; users cannot self-assign admin status without an atomic verified staff invite."
+    },
+    "/adminInvites/{inviteId}": {
+      "schema": { "$ref": "#/entities/AdminInvite" },
+      "description": "Root-admin issued email invitations that allow verified staff members to atomically activate their admin record upon sign-in."
     },
     "/catalogOverrides/{productId}": {
       "schema": { "$ref": "#/entities/CatalogOverride" },

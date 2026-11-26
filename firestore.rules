@@ -12,7 +12,7 @@ service cloud.firestore {
     }
 
     function isOrderId(id) {
-      return id is string && id.size() >= 4 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 4 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -44,17 +44,39 @@ service cloud.firestore {
     // Validation Blueprint: AdminAccount (/admins/{adminId})
     function isValidAdminAccount(data, adminId) {
       return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt'])
-        && data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'staffName', 'roleLabel', 'inviteId', 'grantedBy', 'createdAt'])
         && data.uid is string
         && data.uid == adminId
         && isValidId(data.uid)
         && data.email is string
         && data.email.size() >= 3
         && data.email.size() <= 120
+        && (!('staffName' in data) || (data.staffName is string && data.staffName.size() <= 100))
+        && (!('roleLabel' in data) || (data.roleLabel is string && data.roleLabel.size() <= 80))
+        && (!('inviteId' in data) || isOrderId(data.inviteId))
         && data.grantedBy is string
-        && data.grantedBy == request.auth.uid
         && isValidId(data.grantedBy)
         && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: AdminInvite (/adminInvites/{inviteId})
+    function isValidAdminInvite(data, inviteId) {
+      return data.keys().hasAll(['inviteId', 'email', 'status', 'invitedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['inviteId', 'email', 'staffName', 'roleLabel', 'status', 'invitedBy', 'claimedUid', 'createdAt', 'updatedAt'])
+        && data.inviteId is string
+        && data.inviteId == inviteId
+        && isOrderId(data.inviteId)
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 120
+        && (!('staffName' in data) || (data.staffName is string && data.staffName.size() <= 100))
+        && (!('roleLabel' in data) || (data.roleLabel is string && data.roleLabel.size() <= 80))
+        && data.status in ['pending', 'claimed', 'revoked']
+        && data.invitedBy is string
+        && isValidId(data.invitedBy)
+        && (!('claimedUid' in data) || isValidId(data.claimedUid))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
     }
 
     // Validation Blueprint: CatalogOverride (/catalogOverrides/{productId})
@@ -263,23 +285,87 @@ service cloud.firestore {
       allow delete: if isOrderId(productId) && isAdmin();
     }
 
-    // Admin Authorization Registry (strictly admin-managed; users can check own UID doc)
+    // Staff Email Invitations (Root-admin issued; claimed atomically by verified invited email)
+    match /adminInvites/{inviteId} {
+      allow get: if isOrderId(inviteId) && (
+        isBootstrappedAdmin()
+        || (isSignedIn() && resource != null && existing().email == request.auth.token.email.lower())
+      );
+
+      allow list: if (isBootstrappedAdmin() && request.query.limit <= 200)
+        || (isSignedIn() && resource.data.email == request.auth.token.email.lower() && request.query.limit <= 5);
+
+      allow create: if isOrderId(inviteId)
+        && isBootstrappedAdmin()
+        && isValidAdminInvite(incoming(), inviteId)
+        && incoming().status == 'pending'
+        && incoming().invitedBy == request.auth.uid
+        && !('claimedUid' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOrderId(inviteId)
+        && isValidAdminInvite(incoming(), inviteId)
+        && incoming().inviteId == existing().inviteId
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isBootstrappedAdmin()
+            && incoming().invitedBy == request.auth.uid
+            && incoming().status in ['pending', 'revoked']
+          )
+          || (
+            isSignedIn()
+            && existing().status == 'pending'
+            && existing().email == request.auth.token.email.lower()
+            && incoming().status == 'claimed'
+            && incoming().invitedBy == existing().invitedBy
+            && 'claimedUid' in incoming()
+            && incoming().claimedUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'claimedUid', 'updatedAt'])
+            && existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))
+          )
+        );
+
+      allow delete: if isOrderId(inviteId) && isBootstrappedAdmin();
+    }
+
+    // Admin Authorization Registry (root-managed OR atomic email-invite claim by verified owner)
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
       allow list: if isBootstrappedAdmin() && request.query.limit <= 200;
 
       allow create: if isValidId(adminId)
-        && isAdmin()
         && isValidAdminAccount(incoming(), adminId)
-        && incoming().createdAt == request.time;
+        && incoming().createdAt == request.time
+        && (
+          (
+            isBootstrappedAdmin()
+            && incoming().grantedBy == request.auth.uid
+          )
+          || (
+            isOwner(adminId)
+            && 'inviteId' in incoming()
+            && isOrderId(incoming().inviteId)
+            && exists(/databases/$(database)/documents/adminInvites/$(incoming().inviteId))
+            && get(/databases/$(database)/documents/adminInvites/$(incoming().inviteId)).data.status == 'pending'
+            && get(/databases/$(database)/documents/adminInvites/$(incoming().inviteId)).data.email == request.auth.token.email.lower()
+            && incoming().email == request.auth.token.email.lower()
+            && incoming().grantedBy == get(/databases/$(database)/documents/adminInvites/$(incoming().inviteId)).data.invitedBy
+            && getAfter(/databases/$(database)/documents/adminInvites/$(incoming().inviteId)).data.status == 'claimed'
+            && getAfter(/databases/$(database)/documents/adminInvites/$(incoming().inviteId)).data.claimedUid == request.auth.uid
+          )
+        );
 
       allow update: if false;
-      allow delete: if isValidId(adminId) && isAdmin();
+      allow delete: if isValidId(adminId) && isBootstrappedAdmin();
     }
 
-    // CollectionGroup rule for Admin order dispatch board (no get/exists inside list)
+    // CollectionGroup rule for Admin order dispatch board (no per-doc resource reads)
     match /{path=**}/orders/{orderId} {
-      allow list: if isBootstrappedAdmin() && request.query.limit <= 500;
+      allow list: if isAdmin() && request.query.limit <= 500;
     }
 
     // Account root document (owner read/write, admin read)
@@ -340,7 +426,7 @@ service cloud.firestore {
           );
 
         allow list: if (isSignedIn() && request.auth.uid == userId && resource.data.userId == request.auth.uid)
-          || (isBootstrappedAdmin() && request.query.limit <= 500);
+          || (isAdmin() && request.query.limit <= 500);
 
         allow create: if isValidId(userId)
           && isOrderId(orderId)

@@ -14,8 +14,10 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
+  getDocs,
   limit,
   onSnapshot,
   query,
@@ -23,6 +25,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   Timestamp,
 } from 'firebase/firestore';
 import {
@@ -71,8 +74,23 @@ export interface UserOrderRecord {
 export interface AdminUserRecord {
   uid: string;
   email: string;
+  staffName?: string;
+  roleLabel?: string;
+  inviteId?: string;
   grantedBy: string;
   createdAt?: Timestamp;
+}
+
+export interface AdminInviteRecord {
+  inviteId: string;
+  email: string;
+  staffName?: string;
+  roleLabel?: string;
+  status: 'pending' | 'claimed' | 'revoked';
+  invitedBy: string;
+  claimedUid?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 export interface SaveOrderInput {
@@ -102,6 +120,7 @@ interface AuthContextValue {
   userOrders: UserOrderRecord[];
   allOrders: UserOrderRecord[];
   adminUsers: AdminUserRecord[];
+  adminInvites: AdminInviteRecord[];
   clearAuthError: () => void;
   clearAuthNotice: () => void;
   signInWithGoogle: () => Promise<boolean>;
@@ -140,13 +159,38 @@ interface AuthContextValue {
     account: UserAccountData | null;
     privateInfo: UserPrivateData | null;
   }>;
-  grantAdminAccess: (targetUid: string, email: string) => Promise<{ ok: boolean; error?: string }>;
+  grantAdminAccess: (
+    targetUid: string,
+    email: string,
+    staffName?: string,
+    roleLabel?: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   revokeAdminAccess: (targetUid: string) => Promise<{ ok: boolean; error?: string }>;
+  inviteStaffAdmin: (input: {
+    email: string;
+    staffName?: string;
+    roleLabel?: string;
+  }) => Promise<{ ok: boolean; error?: string; inviteId?: string }>;
+  revokeStaffInvite: (inviteId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const COUNTY_PATTERN = /^[a-z0-9-]+$/;
+
+async function computeInviteId(email: string): Promise<string> {
+  const normalized = email.trim().toLowerCase();
+  const data = new TextEncoder().encode(normalized);
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hex = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `inv_${hex.slice(0, 32)}`;
+  }
+  const safeSlug = normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+  return `inv_${safeSlug || 'staff'}`;
+}
 
 function formatAuthError(error: unknown): string {
   const code = (error as { code?: string })?.code || '';
@@ -187,6 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userOrders, setUserOrders] = useState<UserOrderRecord[]>([]);
   const [allOrders, setAllOrders] = useState<UserOrderRecord[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUserRecord[]>([]);
+  const [adminInvites, setAdminInvites] = useState<AdminInviteRecord[]>([]);
   const [verificationTick, setVerificationTick] = useState(0);
 
   const isBootstrappedAdmin = Boolean(
@@ -201,18 +246,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const emailMatchesBootstrap =
-      (firebaseUser.email || '').toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
+    const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase();
+    const emailMatchesBootstrap = normalizedEmail === BOOTSTRAP_ADMIN_EMAIL;
 
     if (emailMatchesBootstrap) {
       setIsAdmin(true);
     } else {
+      let resolvedAdmin = false;
       try {
-        const adminSnap = await getDoc(doc(db, 'admins', firebaseUser.uid));
-        setIsAdmin(adminSnap.exists());
+        const adminRef = doc(db, 'admins', firebaseUser.uid);
+        const adminSnap = await getDoc(adminRef);
+        if (adminSnap.exists()) {
+          resolvedAdmin = true;
+        } else if (normalizedEmail) {
+          const inviteQuery = query(
+            collection(db, 'adminInvites'),
+            where('email', '==', normalizedEmail),
+            limit(5)
+          );
+          const inviteSnap = await getDocs(inviteQuery);
+          const pendingInviteDoc = inviteSnap.docs.find(
+            (d) => (d.data() as AdminInviteRecord).status === 'pending'
+          );
+
+          if (pendingInviteDoc) {
+            const invite = pendingInviteDoc.data() as AdminInviteRecord;
+            const batch = writeBatch(db);
+            batch.set(adminRef, {
+              uid: firebaseUser.uid,
+              email: normalizedEmail,
+              ...(invite.staffName ? { staffName: invite.staffName } : {}),
+              ...(invite.roleLabel ? { roleLabel: invite.roleLabel } : {}),
+              inviteId: invite.inviteId,
+              grantedBy: invite.invitedBy,
+              createdAt: serverTimestamp(),
+            });
+            batch.update(doc(db, 'adminInvites', invite.inviteId), {
+              status: 'claimed',
+              claimedUid: firebaseUser.uid,
+              updatedAt: serverTimestamp(),
+            });
+            await batch.commit();
+            resolvedAdmin = true;
+            setAuthNotice(
+              `Staff Administrator access activated for ${normalizedEmail}. Operations, Inventory & Dispatch tools are unlocked.`
+            );
+          }
+        }
       } catch {
-        setIsAdmin(false);
+        resolvedAdmin = false;
       }
+      setIsAdmin(resolvedAdmin);
     }
 
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -278,6 +362,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserOrders([]);
         setAllOrders([]);
         setAdminUsers([]);
+        setAdminInvites([]);
         return;
       }
 
@@ -288,6 +373,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserOrders([]);
         setAllOrders([]);
         setAdminUsers([]);
+        setAdminInvites([]);
         return;
       }
 
@@ -353,24 +439,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (error) => handleFirestoreError(error, OperationType.LIST, ordersPath)
     );
 
-    let unsubAllOrders: (() => void) | undefined;
-    let unsubAdmins: (() => void) | undefined;
-    if ((user.email || '').toLowerCase() === BOOTSTRAP_ADMIN_EMAIL) {
-      const adminOrdersQuery = query(collectionGroup(db, 'orders'), limit(500));
-      unsubAllOrders = onSnapshot(
-        adminOrdersQuery,
-        (snapshot) => {
-          const list = snapshot.docs.map((d) => d.data() as UserOrderRecord);
-          list.sort((a, b) => {
-            const msA = a.createdAt?.toMillis?.() ?? 0;
-            const msB = b.createdAt?.toMillis?.() ?? 0;
-            return msB - msA;
-          });
-          setAllOrders(list);
-        },
-        (error) => handleFirestoreError(error, OperationType.LIST, 'orders')
-      );
+    return () => {
+      unsubProfile();
+      unsubPrivate();
+      unsubOrders();
+    };
+  }, [isAuthReady, user, verificationTick]);
 
+  // Subscribe Admin Dispatch Queue & Staff Registry strictly when admin clearance resolves
+  useEffect(() => {
+    if (!isAuthReady || !user || !user.emailVerified || !isAdmin) {
+      setAllOrders([]);
+      setAdminUsers([]);
+      setAdminInvites([]);
+      return;
+    }
+
+    const adminOrdersQuery = query(collectionGroup(db, 'orders'), limit(500));
+    const unsubAllOrders = onSnapshot(
+      adminOrdersQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => d.data() as UserOrderRecord);
+        list.sort((a, b) => {
+          const msA = a.createdAt?.toMillis?.() ?? 0;
+          const msB = b.createdAt?.toMillis?.() ?? 0;
+          return msB - msA;
+        });
+        setAllOrders(list);
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'orders')
+    );
+
+    let unsubAdmins: (() => void) | undefined;
+    let unsubInvites: (() => void) | undefined;
+
+    if (isBootstrappedAdmin) {
       const adminsQuery = query(collection(db, 'admins'), limit(200));
       unsubAdmins = onSnapshot(
         adminsQuery,
@@ -379,19 +482,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (error) => handleFirestoreError(error, OperationType.LIST, 'admins')
       );
+
+      const invitesQuery = query(collection(db, 'adminInvites'), limit(200));
+      unsubInvites = onSnapshot(
+        invitesQuery,
+        (snapshot) => {
+          const list = snapshot.docs.map((d) => d.data() as AdminInviteRecord);
+          list.sort((a, b) => {
+            const msA = a.updatedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? 0;
+            const msB = b.updatedAt?.toMillis?.() ?? b.createdAt?.toMillis?.() ?? 0;
+            return msB - msA;
+          });
+          setAdminInvites(list);
+        },
+        (error) => handleFirestoreError(error, OperationType.LIST, 'adminInvites')
+      );
     } else {
-      setAllOrders([]);
       setAdminUsers([]);
+      setAdminInvites([]);
     }
 
     return () => {
-      unsubProfile();
-      unsubPrivate();
-      unsubOrders();
-      if (unsubAllOrders) unsubAllOrders();
+      unsubAllOrders();
       if (unsubAdmins) unsubAdmins();
+      if (unsubInvites) unsubInvites();
     };
-  }, [isAuthReady, user, verificationTick]);
+  }, [isAuthReady, user, isAdmin, isBootstrappedAdmin, verificationTick]);
 
   const signInWithGoogle = async (): Promise<boolean> => {
     setAuthError(null);
@@ -718,23 +834,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const grantAdminAccess = async (
     targetUid: string,
-    email: string
+    email: string,
+    staffName?: string,
+    roleLabel?: string
   ): Promise<{ ok: boolean; error?: string }> => {
-    if (!user || !user.emailVerified || !isAdmin) {
-      return { ok: false, error: 'Verified Admin required.' };
+    if (!user || !user.emailVerified || !isBootstrappedAdmin) {
+      return { ok: false, error: 'Root Administrator privileges required.' };
     }
     const cleanUid = targetUid.trim();
     const cleanEmail = email.trim().toLowerCase().slice(0, 120);
+    const cleanName = (staffName || '').trim().slice(0, 100);
+    const cleanRole = (roleLabel || '').trim().slice(0, 80);
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(cleanUid)) {
       return { ok: false, error: 'Enter a valid Firebase User UID.' };
     }
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return { ok: false, error: 'Enter a valid staff email address.' };
     }
     try {
       await setDoc(doc(db, 'admins', cleanUid), {
         uid: cleanUid,
         email: cleanEmail,
+        ...(cleanName ? { staffName: cleanName } : {}),
+        ...(cleanRole ? { roleLabel: cleanRole } : {}),
         grantedBy: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -750,15 +872,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const revokeAdminAccess = async (targetUid: string): Promise<{ ok: boolean; error?: string }> => {
-    if (!user || !user.emailVerified || !isAdmin) {
-      return { ok: false, error: 'Verified Admin required.' };
+    if (!user || !user.emailVerified || !isBootstrappedAdmin) {
+      return { ok: false, error: 'Root Administrator privileges required.' };
     }
     const cleanUid = targetUid.trim();
     if (!cleanUid || cleanUid === user.uid) {
       return { ok: false, error: 'Cannot revoke active root session.' };
     }
     try {
+      const targetRecord = adminUsers.find((a) => a.uid === cleanUid);
       await deleteDoc(doc(db, 'admins', cleanUid));
+
+      const matchingInvite = adminInvites.find(
+        (inv) =>
+          inv.claimedUid === cleanUid ||
+          (targetRecord && inv.email.toLowerCase() === targetRecord.email.toLowerCase())
+      );
+      if (matchingInvite && matchingInvite.status !== 'revoked') {
+        try {
+          await updateDoc(doc(db, 'adminInvites', matchingInvite.inviteId), {
+            status: 'revoked',
+            invitedBy: user.uid,
+            updatedAt: serverTimestamp(),
+          });
+        } catch {
+          // Non-fatal if invite cleanup fails
+        }
+      }
       return { ok: true };
     } catch (error) {
       try {
@@ -767,6 +907,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { ok: false, error: 'Unable to revoke admin access.' };
       }
       return { ok: false, error: 'Unable to revoke admin access.' };
+    }
+  };
+
+  const inviteStaffAdmin = async (input: {
+    email: string;
+    staffName?: string;
+    roleLabel?: string;
+  }): Promise<{ ok: boolean; error?: string; inviteId?: string }> => {
+    if (!user || !user.emailVerified || !isBootstrappedAdmin) {
+      return { ok: false, error: 'Root Administrator privileges required.' };
+    }
+    const cleanEmail = input.email.trim().toLowerCase().slice(0, 120);
+    const cleanName = (input.staffName || '').trim().slice(0, 100);
+    const cleanRole = (input.roleLabel || '').trim().slice(0, 80);
+
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { ok: false, error: 'Enter a valid staff email address.' };
+    }
+    if (cleanEmail === BOOTSTRAP_ADMIN_EMAIL) {
+      return { ok: false, error: `${BOOTSTRAP_ADMIN_EMAIL} is already the Root Administrator.` };
+    }
+    if (adminUsers.some((a) => a.email.toLowerCase() === cleanEmail)) {
+      return { ok: false, error: `${cleanEmail} already has active Staff Administrator access.` };
+    }
+
+    const inviteId = await computeInviteId(cleanEmail);
+    const inviteRef = doc(db, 'adminInvites', inviteId);
+
+    try {
+      const existingSnap = await getDoc(inviteRef);
+      if (!existingSnap.exists()) {
+        await setDoc(inviteRef, {
+          inviteId,
+          email: cleanEmail,
+          ...(cleanName ? { staffName: cleanName } : {}),
+          ...(cleanRole ? { roleLabel: cleanRole } : {}),
+          status: 'pending',
+          invitedBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(inviteRef, {
+          status: 'pending',
+          invitedBy: user.uid,
+          staffName: cleanName ? cleanName : deleteField(),
+          roleLabel: cleanRole ? cleanRole : deleteField(),
+          claimedUid: deleteField(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      return { ok: true, inviteId };
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `adminInvites/${inviteId}`);
+      } catch {
+        return { ok: false, error: 'Unable to save staff invitation.' };
+      }
+      return { ok: false, error: 'Unable to save staff invitation.' };
+    }
+  };
+
+  const revokeStaffInvite = async (
+    inviteId: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!user || !user.emailVerified || !isBootstrappedAdmin) {
+      return { ok: false, error: 'Root Administrator privileges required.' };
+    }
+    const cleanId = inviteId.trim();
+    if (!cleanId) return { ok: false, error: 'Invalid invite reference.' };
+
+    try {
+      await updateDoc(doc(db, 'adminInvites', cleanId), {
+        status: 'revoked',
+        invitedBy: user.uid,
+        updatedAt: serverTimestamp(),
+      });
+      return { ok: true };
+    } catch (error) {
+      try {
+        handleFirestoreError(error, OperationType.UPDATE, `adminInvites/${cleanId}`);
+      } catch {
+        return { ok: false, error: 'Unable to revoke staff invitation.' };
+      }
+      return { ok: false, error: 'Unable to revoke staff invitation.' };
     }
   };
 
@@ -785,6 +1010,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userOrders,
         allOrders,
         adminUsers,
+        adminInvites,
         clearAuthError: () => setAuthError(null),
         clearAuthNotice: () => setAuthNotice(null),
         signInWithGoogle,
@@ -800,6 +1026,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadBuyerDetailsForAdmin,
         grantAdminAccess,
         revokeAdminAccess,
+        inviteStaffAdmin,
+        revokeStaffInvite,
       }}
     >
       {children}
