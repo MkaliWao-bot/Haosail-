@@ -5,7 +5,10 @@ import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { LegalTab } from './LegalComplianceModal';
 
+import { Product, Category } from '../types/machinery';
+
 interface FooterProps {
+  products?: Product[];
   onNavigateCategory: (category: string) => void;
   onOpenAdvisor?: () => void;
   onReturnHome?: () => void;
@@ -13,12 +16,18 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({
+  products,
   onNavigateCategory,
   onOpenAdvisor,
   onReturnHome,
   onOpenLegal,
 }) => {
   const { theme, setTheme } = useTheme();
+  const countFor = (cat: Category, fallback: number) =>
+    products && products.length > 0
+      ? products.filter((p) => p.category === cat).length
+      : fallback;
+  const totalCount = products && products.length > 0 ? products.length : 68;
   const themeOptions: { id: ThemeMode; label: string; icon: React.ReactNode }[] = [
     { id: 'light', label: 'Light', icon: <Sun className="h-3 w-3" /> },
     { id: 'dark', label: 'Dark', icon: <Moon className="h-3 w-3" /> },
@@ -68,7 +77,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('woodworking')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Woodworking Machinery (15)
+                  Woodworking Machinery ({countFor('woodworking', 15)})
                 </button>
               </li>
               <li>
@@ -77,7 +86,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('auto-maintenance')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Auto Service &amp; Lifts (21)
+                  Auto Service &amp; Lifts ({countFor('auto-maintenance', 21)})
                 </button>
               </li>
               <li>
@@ -86,7 +95,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('welding-metalworking')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Welding &amp; Metalworking (8)
+                  Welding &amp; Metalworking ({countFor('welding-metalworking', 8)})
                 </button>
               </li>
               <li>
@@ -95,7 +104,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('construction-concrete')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Construction &amp; Concrete (8)
+                  Construction &amp; Concrete ({countFor('construction-concrete', 8)})
                 </button>
               </li>
               <li>
@@ -104,7 +113,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('workshop-tools')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Workshop, Forklifts &amp; Pumps (16)
+                  Workshop, Forklifts &amp; Pumps ({countFor('workshop-tools', 16)})
                 </button>
               </li>
               <li>
@@ -113,7 +122,7 @@ export const Footer: React.FC<FooterProps> = ({
                   onClick={() => onNavigateCategory('all')}
                   className="text-sky-400 hover:text-white transition-colors font-medium cursor-pointer"
                 >
-                  View All Equipment (68)
+                  View All Equipment ({totalCount})
                 </button>
               </li>
             </ul>

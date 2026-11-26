@@ -5,6 +5,7 @@ import { useCatalogOverrides } from './context/CatalogOverridesContext';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { CatalogSection } from './components/CatalogSection';
+import { WorkshopBundlesSection } from './components/WorkshopBundlesSection';
 import { ShowroomProofSection } from './components/ShowroomProofSection';
 import { SearchCommandModal } from './components/SearchCommandModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -14,6 +15,7 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { CheckoutPage } from './components/CheckoutPage';
 import { GeminiAdvisorModal } from './components/GeminiAdvisorModal';
 import { ProformaInvoiceModal } from './components/ProformaInvoiceModal';
+import { QuoteDocumentType } from './utils/quotationPdf';
 import { SpecSheetModal } from './components/SpecSheetModal';
 import { AuthModal } from './components/AuthModal';
 import { LegalComplianceModal, LegalTab } from './components/LegalComplianceModal';
@@ -74,6 +76,11 @@ export default function App() {
   const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
   const [isProformaOpen, setIsProformaOpen] = useState(false);
   const [proformaProduct, setProformaProduct] = useState<Product | null>(null);
+  const [proformaInitialItems, setProformaInitialItems] = useState<
+    { product: Product; quantity: number }[] | null
+  >(null);
+  const [proformaInitialDocType, setProformaInitialDocType] =
+    useState<QuoteDocumentType>('quotation');
   const [specSheetState, setSpecSheetState] = useState<{
     product: Product;
     voltage?: string;
@@ -110,9 +117,55 @@ export default function App() {
   );
 
   const handleOpenProforma = (product?: Product) => {
+    setProformaInitialItems(null);
+    setProformaInitialDocType('quotation');
     setProformaProduct(product || null);
     setIsProformaOpen(true);
   };
+
+  const handleOpenBundleFinancePack = (items: { product: Product; quantity: number }[]) => {
+    setProformaProduct(null);
+    setProformaInitialItems(items);
+    setProformaInitialDocType('finance-pack');
+    setIsProformaOpen(true);
+  };
+
+  const handleLoadBundleToCheckout = (items: { product: Product; quantity: number }[]) => {
+    if (items.length === 0) return;
+    setCartItems(items.map((i) => ({ product: i.product, quantity: i.quantity })));
+    setSelectedProduct(null);
+    setIsCartOpen(false);
+    setCurrentView('checkout');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Deep link support (?machine=<id>) for shareable WhatsApp/URL machine links
+  const [didCheckUrlMachine, setDidCheckUrlMachine] = useState(false);
+  useEffect(() => {
+    if (didCheckUrlMachine || liveProducts.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const machineId = params.get('machine');
+    if (machineId) {
+      const matched = liveProducts.find(
+        (p) => p.id === machineId || p.sku.toLowerCase() === machineId.toLowerCase()
+      );
+      if (matched) {
+        setSelectedProduct(matched);
+      }
+    }
+    setDidCheckUrlMachine(true);
+  }, [didCheckUrlMachine, liveProducts]);
+
+  useEffect(() => {
+    if (!didCheckUrlMachine) return;
+    const url = new URL(window.location.href);
+    if (selectedProduct) {
+      url.searchParams.set('machine', selectedProduct.id);
+    } else {
+      url.searchParams.delete('machine');
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [selectedProduct, didCheckUrlMachine]);
 
   const isPrintDocumentOpen = isProformaOpen || Boolean(specSheetState);
 
@@ -362,6 +415,7 @@ export default function App() {
           <>
             {/* Editorial Cinema Hero Banner */}
             <HeroBanner
+              products={liveProducts}
               onSearchSubmit={handleSearchSubmitFromHero}
               onExploreCatalog={() => {
                 setFilterState(INITIAL_FILTER_STATE);
@@ -389,6 +443,14 @@ export default function App() {
               onOpenComparison={() => setIsComparisonOpen(true)}
               onOpenAdvisor={() => setIsAdvisorOpen(true)}
               onRequestProforma={(product) => handleOpenProforma(product)}
+            />
+
+            {/* Turnkey Workshop Starter Bundles */}
+            <WorkshopBundlesSection
+              products={liveProducts}
+              onSelectProduct={(p) => setSelectedProduct(p)}
+              onLoadBundleToCheckout={handleLoadBundleToCheckout}
+              onOpenBundleFinancePack={handleOpenBundleFinancePack}
             />
 
             {/* Yard Verification, KRA E-TIMS & County Dispatch Proof Strip */}
@@ -506,11 +568,16 @@ export default function App() {
         onClose={() => setIsAdvisorOpen(false)}
       />
 
-      {/* Official B2B KRA E-TIMS Proforma Invoice Generator Modal */}
+      {/* Official B2B KRA E-TIMS Proforma Invoice & Asset Finance Pack Generator */}
       <ProformaInvoiceModal
         isOpen={isProformaOpen}
-        onClose={() => setIsProformaOpen(false)}
+        onClose={() => {
+          setIsProformaOpen(false);
+          setProformaInitialItems(null);
+        }}
         product={liveProformaProduct}
+        initialItems={proformaInitialItems}
+        initialDocType={proformaInitialDocType}
         cartItems={syncedCartItems}
         products={liveProducts}
         onSyncCartFromQuote={(quotedItems) => {
@@ -518,6 +585,7 @@ export default function App() {
         }}
         onProceedToCheckout={() => {
           setIsProformaOpen(false);
+          setProformaInitialItems(null);
           setCurrentView('checkout');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -591,6 +659,7 @@ export default function App() {
       {/* Industrial Footer */}
       <div className={isPrintDocumentOpen ? 'print:hidden' : undefined}>
         <Footer
+          products={liveProducts}
           onNavigateCategory={handleCategoryNav}
           onOpenAdvisor={() => setIsAdvisorOpen(true)}
           onReturnHome={handleReturnHome}

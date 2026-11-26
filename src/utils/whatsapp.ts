@@ -55,3 +55,25 @@ export function buildCartWhatsAppUrl(
 
   return `https://wa.me/${HAOSAIL_WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
 }
+
+export function buildProductVideoInspectionUrl(
+  product: Product,
+  options?: {
+    selectedVoltage?: string;
+    selectedYard?: 'Nairobi Enterprise Rd' | 'Mombasa Changamwe';
+  }
+): string {
+  const yard = options?.selectedYard || 'Nairobi Enterprise Rd';
+  const voltage = options?.selectedVoltage || product.specs.voltage.split('/')[0].trim();
+
+  const lines = [
+    `Hello HaoSail Yard Team, I would like to book a 10-minute Live WhatsApp Video Inspection:`,
+    `Machine: ${product.name}`,
+    `SKU: ${product.sku}`,
+    `Power Spec: ${voltage}`,
+    `Preferred Yard: ${yard}`,
+    `Please confirm a time slot to power-test the unit and verify the serial nameplate on video.`,
+  ];
+
+  return `https://wa.me/${HAOSAIL_WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
+}

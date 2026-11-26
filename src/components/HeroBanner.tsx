@@ -8,6 +8,7 @@ import {
 import { Category, Product } from '../types/machinery';
 
 interface HeroBannerProps {
+  products?: Product[];
   onSearchSubmit?: (query: string) => void;
   onExploreCatalog: () => void;
   onSelectCategory?: (category: Category) => void;
@@ -74,6 +75,7 @@ const SPEC_INDEX_ITEMS: DivisionHeroConfig[] = [
 ];
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({
+  products,
   onExploreCatalog,
   onSelectCategory,
   onOpenProforma,
@@ -139,6 +141,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
   const activeDivision = SPEC_INDEX_ITEMS[activeIndex];
   const isTabTimerPaused = isHoverPaused || prefersReducedMotion;
+  const totalMachineCount = products && products.length > 0 ? products.length : 68;
+  const getCategoryCount = (cat: Category, fallbackCount: number) =>
+    products && products.length > 0
+      ? products.filter((p) => p.category === cat).length
+      : fallbackCount;
 
   const jumpToSlide = (nextIdx: number) => {
     const wrapped = (nextIdx + SPEC_INDEX_ITEMS.length) % SPEC_INDEX_ITEMS.length;
@@ -240,7 +247,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   onClick={onExploreCatalog}
                   className="btn-press btn-nudge inline-flex items-center gap-2.5 rounded-md bg-[#004B97] hover:bg-[#003B78] px-6 py-3.5 text-sm font-semibold text-white cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <span>Browse 68 Machines</span>
+                  <span>Browse {totalMachineCount} Machines</span>
                   <ArrowRight className="h-4 w-4 btn-arrow" />
                 </button>
 
@@ -344,7 +351,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
                   <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-slate-400 tabular-nums">
                     <span className="truncate">{item.specRange}</span>
-                    <span className="text-slate-300 shrink-0">{item.count} units</span>
+                    <span className="text-slate-300 shrink-0">
+                      {getCategoryCount(item.category, item.count)} units
+                    </span>
                   </div>
                 </button>
               );

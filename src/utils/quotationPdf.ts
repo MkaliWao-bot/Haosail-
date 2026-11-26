@@ -4,7 +4,7 @@ import { CountyHub } from '../data/accessoryData';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { formatKSh } from './currency';
 
-export type QuoteDocumentType = 'quotation' | 'proforma';
+export type QuoteDocumentType = 'quotation' | 'proforma' | 'finance-pack';
 
 export interface QuotationPdfPayload {
   docType: QuoteDocumentType;
@@ -34,7 +34,12 @@ export function downloadQuotationPdf(payload: QuotationPdfPayload): string {
   const contentWidth = pageWidth - margin * 2;
 
   const isQuotation = payload.docType === 'quotation';
-  const docTitle = isQuotation ? 'OFFICIAL QUOTATION' : 'PROFORMA INVOICE';
+  const isFinancePack = payload.docType === 'finance-pack';
+  const docTitle = isQuotation
+    ? 'OFFICIAL QUOTATION'
+    : isFinancePack
+      ? 'BANK / SACCO ASSET FINANCE'
+      : 'PROFORMA INVOICE';
 
   // Top Royal Blue Header Band
   doc.setFillColor(0, 75, 151);
@@ -314,6 +319,53 @@ export function downloadQuotationPdf(payload: QuotationPdfPayload): string {
     align: 'right',
   });
 
+  if (isFinancePack) {
+    y += 44;
+    if (y > pageHeight - 54) {
+      doc.addPage();
+      y = 18;
+    }
+    const down20 = Math.round(payload.grandTotal * 0.2);
+    const bal80 = payload.grandTotal - down20;
+    const down30 = Math.round(payload.grandTotal * 0.3);
+    const bal70 = payload.grandTotal - down30;
+
+    doc.setFillColor(240, 247, 255);
+    doc.setDrawColor(0, 75, 151);
+    doc.roundedRect(margin, y, contentWidth, 30, 1.5, 1.5, 'FD');
+
+    doc.setTextColor(0, 75, 151);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('CREDIT COMMITTEE / SACCO ASSET-FINANCE ASSURANCE SCHEDULE', margin + 4, y + 5.5);
+
+    doc.setTextColor(17, 19, 21);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.6);
+    doc.text(
+      `• 20% Deposit Option: ${formatKSh(down20)}  |  80% Bank / SACCO Financed Principal: ${formatKSh(bal80)}`,
+      margin + 4,
+      y + 11.5
+    );
+    doc.text(
+      `• 30% Deposit Option: ${formatKSh(down30)}  |  70% Bank / SACCO Financed Principal: ${formatKSh(bal70)}`,
+      margin + 4,
+      y + 16.5
+    );
+    doc.text(
+      `• Compliance: Brand-new CE / ISO 9001 factory units calibrated for Kenya 50Hz grid, serial-numbered for asset tagging & KRA eTIMS invoicing.`,
+      margin + 4,
+      y + 21.5,
+      { maxWidth: contentWidth - 8 }
+    );
+    doc.text(
+      `• Custody & Security: 5-Year Factory Warranty, In-Transit Freight Insurance, and Pre-Disbursement Yard Inspection available on Enterprise Rd.`,
+      margin + 4,
+      y + 26.5,
+      { maxWidth: contentWidth - 8 }
+    );
+  }
+
   // Footer Disclaimer
   doc.setDrawColor(226, 228, 232);
   doc.line(margin, pageHeight - 18, pageWidth - margin, pageHeight - 18);
@@ -332,7 +384,11 @@ export function downloadQuotationPdf(payload: QuotationPdfPayload): string {
     { align: 'right' }
   );
 
-  const prefix = isQuotation ? 'HaoSail-Quotation' : 'HaoSail-Proforma';
+  const prefix = isQuotation
+    ? 'HaoSail-Quotation'
+    : isFinancePack
+      ? 'HaoSail-FinancePack'
+      : 'HaoSail-Proforma';
   const filename = `${prefix}-${payload.quoteNumber}.pdf`;
   doc.save(filename);
   return filename;

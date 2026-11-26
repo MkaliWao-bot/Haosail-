@@ -11,12 +11,14 @@ import {
   ArrowRight,
   ShoppingBag,
   Wrench,
+  Share2,
+  Video,
 } from 'lucide-react';
 import { Product, CheckoutPlanPreset } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
 import { KENYAN_COUNTY_HUBS } from '../data/accessoryData';
 import { STORE_CONFIG } from '../config/storeConfig';
-import { buildProductWhatsAppUrl } from '../utils/whatsapp';
+import { buildProductVideoInspectionUrl, buildProductWhatsAppUrl } from '../utils/whatsapp';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -70,6 +72,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   );
   const [imgFailed, setImgFailed] = useState(false);
   const [isAddedToCart, setIsAddedToCart] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Configuration selections
   const [selectedVoltage, setSelectedVoltage] = useState<string>(() => {
@@ -121,6 +124,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     onAddToCart(product, quantity);
     setIsAddedToCart(true);
     window.setTimeout(() => setIsAddedToCart(false), 1600);
+  };
+
+  const handleCopyShareLink = () => {
+    const url = `${window.location.origin}/?machine=${encodeURIComponent(product.id)}`;
+    navigator.clipboard?.writeText(url);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1800);
   };
 
   const handleDirectBuyNow = () => {
@@ -283,7 +293,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
 
               {/* Secondary Utility Links */}
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-2 text-xs">
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 pt-2 text-xs">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {onOpenAdvisor && (
                     <button
@@ -312,20 +322,49 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <MessageCircle className="h-3.5 w-3.5" />
                     <span>WhatsApp Quote</span>
                   </a>
+
+                  {isLipaPolePoleEligible && (
+                    <a
+                      href={buildProductVideoInspectionUrl(product, {
+                        selectedVoltage,
+                      })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 font-medium text-[#004B97] dark:text-sky-400 hover:underline transition-colors whitespace-nowrap"
+                    >
+                      <Video className="h-3.5 w-3.5" />
+                      <span>Book Video Yard Test</span>
+                    </a>
+                  )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onToggleCompare(product)}
-                  className={`inline-flex items-center gap-1.5 font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                    isCompared
-                      ? 'text-[#004B97] dark:text-sky-400'
-                      : 'text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white'
-                  }`}
-                >
-                  <GitCompare className="h-3.5 w-3.5" />
-                  <span>{isCompared ? 'Added to Compare' : 'Compare Machine'}</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    className="inline-flex items-center gap-1.5 font-medium text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    {linkCopied ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <Share2 className="h-3.5 w-3.5" />
+                    )}
+                    <span>{linkCopied ? 'Link Copied' : 'Share Link'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleCompare(product)}
+                    className={`inline-flex items-center gap-1.5 font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      isCompared
+                        ? 'text-[#004B97] dark:text-sky-400'
+                        : 'text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white'
+                    }`}
+                  >
+                    <GitCompare className="h-3.5 w-3.5" />
+                    <span>{isCompared ? 'Added to Compare' : 'Compare'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -817,6 +856,31 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           </ul>
                         </div>
                       )}
+
+                      {/* Dynamic Pre-Delivery Site Readiness & Electrical Checklist */}
+                      <div className="rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-[#F6F6F4] dark:bg-[#111318] p-3.5 space-y-2">
+                        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#004B97] dark:text-sky-400">
+                          Pre-Delivery Site Readiness Checklist
+                        </h3>
+                        <ul className="space-y-1.5 text-[11px] text-[#5A606B] dark:text-slate-300 leading-relaxed">
+                          <li>
+                            • <strong className="text-[#111315] dark:text-white">Power &amp; Breaker:</strong>{' '}
+                            {selectedVoltage.includes('400') || selectedVoltage.includes('3-Phase')
+                              ? `Requires 400V/415V 3-Phase 50Hz supply with ${product.specs.amperage} dedicated MCB isolator.`
+                              : `Verify ${product.specs.voltage} (${product.specs.amperage}) feed with industrial earthing.`}
+                          </li>
+                          <li>
+                            • <strong className="text-[#111315] dark:text-white">Floor &amp; Access:</strong>{' '}
+                            {product.subCategory === 'vehicle-lifts'
+                              ? 'Minimum 150mm (6") reinforced 3000 PSI concrete slab cured ≥ 14 days before anchoring.'
+                              : `Clear ${product.specs.footprint} bay footprint; ${
+                                  weightKg >= 250
+                                    ? `tailgate or forklift offloading recommended (${weightKg.toLocaleString()} kg crate).`
+                                    : `standard ground bay access (${weightKg.toLocaleString()} kg unit).`
+                                }`}
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   )}
 

@@ -27,6 +27,8 @@ interface ProformaInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
   product?: Product | null;
+  initialItems?: { product: Product; quantity: number }[] | null;
+  initialDocType?: QuoteDocumentType;
   cartItems?: CartItem[];
   products?: Product[];
   onSyncCartFromQuote?: (items: { product: Product; quantity: number }[]) => void;
@@ -37,6 +39,8 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
   isOpen,
   onClose,
   product,
+  initialItems = null,
+  initialDocType,
   cartItems = [],
   products = [],
   onSyncCartFromQuote,
@@ -44,7 +48,7 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
 }) => {
   const { accountProfile, privateInfo, user } = useAuth();
 
-  const [docType, setDocType] = useState<QuoteDocumentType>('quotation');
+  const [docType, setDocType] = useState<QuoteDocumentType>(initialDocType || 'quotation');
   const [quoteItems, setQuoteItems] = useState<{ product: Product; quantity: number }[]>([]);
   const [clientName, setClientName] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -63,7 +67,14 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    if (product) {
+    if (initialDocType) {
+      setDocType(initialDocType);
+    }
+
+    if (initialItems && initialItems.length > 0) {
+      setQuoteItems(initialItems);
+      setShowPicker(false);
+    } else if (product) {
       setQuoteItems([{ product, quantity: 1 }]);
       setShowPicker(false);
     } else if (cartItems.length > 0) {
@@ -87,7 +98,7 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
         setCountyId(privateInfo.preferredCountyId);
       }
     }
-  }, [isOpen, product, cartItems, accountProfile, privateInfo, user]);
+  }, [isOpen, product, initialItems, initialDocType, cartItems, accountProfile, privateInfo, user]);
 
   // Deterministic quote reference seeded by items
   const quoteNumber = useMemo(() => {
@@ -96,7 +107,8 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
       0
     );
     const code = String(1000 + (seed % 8999)).padStart(4, '0');
-    const prefix = docType === 'quotation' ? 'HS-QT' : 'HS-PRF';
+    const prefix =
+      docType === 'quotation' ? 'HS-QT' : docType === 'finance-pack' ? 'HS-FIN' : 'HS-PRF';
     return `${prefix}-2026-${code}`;
   }, [quoteItems, docType]);
 
@@ -198,7 +210,12 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
   };
 
   const buildQuotePlainText = () => {
-    const docLabel = docType === 'quotation' ? 'Official Quotation' : 'Proforma Invoice';
+    const docLabel =
+      docType === 'quotation'
+        ? 'Official Quotation'
+        : docType === 'finance-pack'
+          ? 'Bank / SACCO Asset Finance Pack'
+          : 'Proforma Invoice';
     const itemLines = quoteItems.map(
       ({ product: p, quantity }, idx) =>
         `${idx + 1}. ${quantity}x ${p.name} (${p.sku}) - ${formatKSh(p.price * quantity)}`
@@ -266,12 +283,12 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
               </span>
             </div>
 
-            {/* Quotation vs Proforma Toggle */}
+            {/* Quotation vs Proforma vs Bank / SACCO Finance Pack Toggle */}
             <div className="inline-flex rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] p-0.5 text-[11px] font-mono">
               <button
                 type="button"
                 onClick={() => setDocType('quotation')}
-                className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-colors cursor-pointer whitespace-nowrap ${
                   docType === 'quotation'
                     ? 'bg-[#004B97] text-white font-semibold'
                     : 'text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white'
@@ -282,13 +299,24 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
               <button
                 type="button"
                 onClick={() => setDocType('proforma')}
-                className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-colors cursor-pointer whitespace-nowrap ${
                   docType === 'proforma'
                     ? 'bg-[#004B97] text-white font-semibold'
                     : 'text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white'
                 }`}
               >
                 Proforma Invoice
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocType('finance-pack')}
+                className={`px-2.5 py-1 rounded transition-colors cursor-pointer whitespace-nowrap ${
+                  docType === 'finance-pack'
+                    ? 'bg-[#004B97] text-white font-semibold'
+                    : 'text-[#5A606B] dark:text-slate-400 hover:text-[#111315] dark:hover:text-white'
+                }`}
+              >
+                Bank / SACCO Pack
               </button>
             </div>
           </div>
@@ -374,7 +402,11 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
 
             <div className="sm:text-right bg-[#F6F6F4] dark:bg-[#111318] p-4 rounded-lg border border-[#E2E4E8] dark:border-[#262A33] shrink-0 min-w-56 print:bg-slate-50 print:border-slate-200">
               <span className="inline-block font-mono text-[10px] font-semibold uppercase tracking-widest text-white bg-[#004B97] px-2.5 py-0.5 rounded">
-                {docType === 'quotation' ? 'OFFICIAL QUOTATION' : 'PROFORMA INVOICE'}
+                {docType === 'quotation'
+                  ? 'OFFICIAL QUOTATION'
+                  : docType === 'finance-pack'
+                    ? 'ASSET FINANCE PACK'
+                    : 'PROFORMA INVOICE'}
               </span>
               <h2 className="font-mono text-base font-bold text-[#111315] dark:text-white mt-2 tabular-nums print:text-slate-900">
                 {quoteNumber}
@@ -549,7 +581,7 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
                       type="text"
                       value={machineQuery}
                       onChange={(e) => setMachineQuery(e.target.value)}
-                      placeholder="Search any of 68 machines by name, SKU, or division (e.g. DW902, Lift, Lathe)..."
+                      placeholder={`Search any of ${products.length} machines by name, SKU, or division (e.g. DW902, Lift, Lathe)...`}
                       className="w-full rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] pl-9 pr-3 py-2 text-xs text-[#111315] dark:text-white placeholder-slate-400 focus:border-[#004B97] dark:focus:border-sky-400 focus:outline-none"
                     />
                   </div>
@@ -778,6 +810,36 @@ export const ProformaInvoiceModal: React.FC<ProformaInvoiceModalProps> = ({
               )}
             </div>
           </div>
+
+          {docType === 'finance-pack' && quoteItems.length > 0 && (
+            <div className="rounded-lg border border-[#004B97]/30 dark:border-sky-500/35 bg-[#004B97]/[0.04] dark:bg-sky-950/20 p-4 text-xs space-y-2.5 print:bg-slate-50">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#004B97] dark:text-sky-400">
+                  Credit Committee / SACCO Asset-Finance Assurance
+                </span>
+                <span className="font-mono text-[11px] text-[#5A606B] dark:text-slate-400">
+                  Equity · KCB · Co-op · SACCO Ready
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-[11px] tabular-nums">
+                <div className="rounded border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] px-3 py-2">
+                  <span className="text-[#5A606B] dark:text-slate-400 block">20% Client Deposit / 80% Financed</span>
+                  <span className="font-semibold text-[#111315] dark:text-white">
+                    {formatKSh(Math.round(grandTotal * 0.2))} down · {formatKSh(grandTotal - Math.round(grandTotal * 0.2))} loan
+                  </span>
+                </div>
+                <div className="rounded border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#15181E] px-3 py-2">
+                  <span className="text-[#5A606B] dark:text-slate-400 block">30% Client Deposit / 70% Financed</span>
+                  <span className="font-semibold text-[#111315] dark:text-white">
+                    {formatKSh(Math.round(grandTotal * 0.3))} down · {formatKSh(grandTotal - Math.round(grandTotal * 0.3))} loan
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-[#5A606B] dark:text-slate-300 leading-relaxed">
+                Includes brand-new serial-numbered unit verification for bank asset tagging, Kenya 50Hz grid calibration compliance, 5-year commercial warranty, and in-transit freight insurance.
+              </p>
+            </div>
+          )}
 
           {/* Footer Actions */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 border-t border-[#E2E4E8] dark:border-[#262A33] print:hidden">
