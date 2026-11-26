@@ -193,8 +193,8 @@
       "required": ["uid", "email", "grantedBy", "createdAt"]
     },
     "CatalogOverride": {
-      "title": "Live Catalog Price & Inventory Override",
-      "description": "Admin-managed live price and stock override for catalog machinery.",
+      "title": "Live Catalog Price, Inventory & Archive Override",
+      "description": "Admin-managed live price, stock count, and archive visibility override for factory catalog machinery.",
       "type": "object",
       "properties": {
         "productId": {
@@ -212,6 +212,9 @@
         "stockCount": {
           "type": "integer"
         },
+        "archived": {
+          "type": "boolean"
+        },
         "updatedBy": {
           "type": "string",
           "minLength": 1,
@@ -224,6 +227,189 @@
         }
       },
       "required": ["productId", "priceKes", "inStock", "stockCount", "updatedBy", "updatedAt"]
+    },
+    "CatalogProduct": {
+      "title": "Admin-Added Catalog Machine",
+      "description": "Admin-created machinery equipment added dynamically to the live HaoSail storefront catalog.",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sku": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "subtitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "woodworking",
+            "auto-maintenance",
+            "welding-metalworking",
+            "construction-concrete",
+            "workshop-tools"
+          ]
+        },
+        "categoryLabel": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "subCategory": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "subCategoryLabel": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "priceKes": {
+          "type": "number"
+        },
+        "originalPriceKes": {
+          "type": "number"
+        },
+        "stockCount": {
+          "type": "integer"
+        },
+        "inStock": {
+          "type": "boolean"
+        },
+        "freightTier": {
+          "type": "string",
+          "enum": ["standard-ground", "freight-ltl", "heavy-freight"]
+        },
+        "isFreeFreight": {
+          "type": "boolean"
+        },
+        "isPopular": {
+          "type": "boolean"
+        },
+        "isNewArrival": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "powerSource": {
+          "type": "string",
+          "enum": [
+            "all",
+            "corded-230v",
+            "corded-115v",
+            "cordless-18v",
+            "3-phase-400v",
+            "engine-manual"
+          ]
+        },
+        "motor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "voltage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "amperage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "capacity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "footprint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "weightLbs": {
+          "type": "number"
+        },
+        "warrantyYears": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "features": {
+          "type": "array"
+        },
+        "includedItems": {
+          "type": "array"
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "productId",
+        "sku",
+        "name",
+        "subtitle",
+        "category",
+        "categoryLabel",
+        "priceKes",
+        "stockCount",
+        "inStock",
+        "freightTier",
+        "isFreeFreight",
+        "image",
+        "powerSource",
+        "motor",
+        "voltage",
+        "amperage",
+        "capacity",
+        "footprint",
+        "weightLbs",
+        "warrantyYears",
+        "description",
+        "features",
+        "includedItems",
+        "createdBy",
+        "updatedBy",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -245,7 +431,11 @@
     },
     "/catalogOverrides/{productId}": {
       "schema": { "$ref": "#/entities/CatalogOverride" },
-      "description": "Publicly readable live inventory & price overrides writable only by verified admins."
+      "description": "Publicly readable live inventory, price, and archive overrides writable only by verified admins."
+    },
+    "/catalogProducts/{productId}": {
+      "schema": { "$ref": "#/entities/CatalogProduct" },
+      "description": "Publicly readable custom machinery items created, updated, and deleted exclusively by verified admins."
     }
   }
 }

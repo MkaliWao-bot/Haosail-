@@ -210,11 +210,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <button
             type="button"
             onClick={handleProforma}
-            title="Generate E-TIMS Proforma Quote"
+            title="Generate Official Quotation (PDF)"
             className="btn-press inline-flex items-center justify-center gap-1.5 bg-white dark:bg-[#15181E] px-4 py-2.5 text-xs font-medium text-[#111315] dark:text-slate-200 hover:bg-[#F6F6F4] dark:hover:bg-[#1C2029] hover:text-[#004B97] dark:hover:text-sky-400 cursor-pointer whitespace-nowrap shrink-0"
           >
             <FileText className="h-3.5 w-3.5 text-[#004B97] dark:text-sky-400" />
-            <span>Quote</span>
+            <span>Get Quote</span>
           </button>
         )}
       </div>

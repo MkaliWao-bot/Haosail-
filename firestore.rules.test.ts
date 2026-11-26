@@ -163,4 +163,33 @@ export const DIRTY_DOZEN_PAYLOADS: DirtyDozenCase[] = [
     },
     expectedResult: 'PERMISSION_DENIED',
   },
+  {
+    id: 15,
+    name: 'Non-Admin Custom Catalog Product Injection',
+    targetPath: '/catalogProducts/hs-custom-spoof',
+    operation: 'create',
+    uid: 'buyer_uid',
+    emailVerified: true,
+    payload: {
+      productId: 'hs-custom-spoof',
+      sku: 'HS-FAKE-01',
+      name: 'Unauthorized Listing',
+      priceKes: 100,
+      stockCount: 5,
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
+  {
+    id: 16,
+    name: 'Unbounded Features List Injection on CatalogProduct',
+    targetPath: '/catalogProducts/hs-custom-overflow',
+    operation: 'create',
+    uid: 'admin_uid',
+    emailVerified: true,
+    payload: {
+      productId: 'hs-custom-overflow',
+      features: Array(25).fill('Feature overflow'),
+    },
+    expectedResult: 'PERMISSION_DENIED',
+  },
 ];

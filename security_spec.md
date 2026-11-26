@@ -5,12 +5,12 @@
 2. **PII Split Isolation**: Contact fields (`email`, `phone`, `kraPin`, `address`) reside strictly in `/users/{userId}/private/info`, isolated from `/users/{userId}` and readable only by the verified owner (`isOwner(userId)`) or verified dispatch administrators (`isAdmin()`).
 3. **RBAC Admin Isolation (No Self-Escalation)**: Admin privileges are verified exclusively via bootstrapped runtime admin email (`felitexcyber001@gmail.com` with `email_verified == true`) or an authorized document in `/admins/{uid}`. Regular users cannot add `role`/`isAdmin` fields to `/users/{uid}` or write `/admins/{uid}`.
 4. **Master Gate Parent Existence**: Subcollections `/users/{userId}/private/{docId}` and `/users/{userId}/orders/{orderId}` verify that the parent `/users/{userId}` document exists before allowing sub-resource writes.
-5. **Immutable Ownership & Timestamps**: `uid`, `userId`, `orderId`, and `createdAt` are immutable once created. `createdAt` and `updatedAt` must equal `request.time` on create/update respectively.
+5. **Immutable Ownership & Timestamps**: `uid`, `userId`, `orderId`, `createdBy`, and `createdAt` are immutable once created. `createdAt` and `updatedAt` must equal `request.time` on create/update respectively.
 6. **Admin-Only Order Fulfillment & Terminal State Lock**: Buyers can create orders solely in `'confirmed'` status (with optional `etimsControlNumber` <= 64 chars) and cannot mutate order status to `'dispatched'` or `'completed'`. Only `isAdmin()` can update order `status`. Orders in `'completed'` status are locked against non-admin resurrection.
 7. **Strict Field Allowlisting & Query Enforcer**: Every entity checks `keys().hasAll(...)` + `keys().hasOnly(...)` on create and `diff().affectedKeys().hasOnly(...)` on update; `allow list` never invokes `get()`/`exists()` and evaluates `resource.data`.
-8. **Live Catalog Overrides Integrity**: `/catalogOverrides/{productId}` stores non-PII price and stock counts readable by visitors (`isOrderId(productId)`), while creation, update (`priceKes` 100–50,000,000 KES, `stockCount` 0–10,000), and deletion are restricted strictly to `isAdmin()`.
+8. **Live Catalog Overrides & Custom Products Integrity**: `/catalogOverrides/{productId}` stores non-PII price, stock counts, and optional `archived` visibility boolean readable by visitors (`isOrderId(productId)`), while `/catalogProducts/{productId}` stores admin-added machinery models (with bounded feature/included-item lists `<= 12`). Creation, update (`priceKes` 100–50,000,000 KES, `stockCount` 0–10,000), and deletion on both catalog collections are restricted strictly to `isAdmin()`.
 
-## 2. The "Dirty Dozen" Attack Payloads (+ Extended Inventory/eTIMS Vectors)
+## 2. The "Dirty Dozen" Attack Payloads (+ Extended Inventory/Catalog Vectors)
 1. **Cross-User Read/Write Spoof**: Non-admin User A (`uid: "userA"`) attempts to read or create `/users/userB/private/info`. -> Expect `PERMISSION_DENIED`.
 2. **Unverified Email/Password Bypass**: Newly registered user with `email_verified: false` writes `/users/{uid}` or admin email with `email_verified: false`. -> Expect `PERMISSION_DENIED`.
 3. **Ghost / Shadow Privilege Escalation Field**: Owner sends `{ uid, displayName, role: "admin", isAdmin: true, createdAt, updatedAt }` to `/users/{uid}`. -> Expect `PERMISSION_DENIED`.
@@ -23,5 +23,5 @@
 10. **Owner UID Reassignment on Update**: Owner attempts `update` on `/users/{uid}/orders/ORD-1001` changing `userId` to `"attacker"`. -> Expect `PERMISSION_DENIED`.
 11. **Invalid Enum Status Injection**: Client creates order with `status: "free-override"`, `paymentMethod: "cash-bypass"`, or `settlementMode: "zero-cost"`. -> Expect `PERMISSION_DENIED`.
 12. **Terminal State Modification by Non-Admin**: Non-admin buyer attempts to revert an order whose `existing().status == 'completed'` back to `'confirmed'`. -> Expect `PERMISSION_DENIED`.
-13. **Non-Admin Catalog Price Tampering**: Verified customer attempts to write `/catalogOverrides/hs-ps-575k` setting `priceKes: 100`. -> Expect `PERMISSION_DENIED`.
-14. **Out-of-Bounds Stock Count or Negative Price Override**: Admin attempts negative `stockCount` (`-5`) or below-floor price (`1` KES) on `/catalogOverrides/{productId}`. -> Expect `PERMISSION_DENIED`.
+13. **Non-Admin Catalog Price Tampering / Product Injection**: Verified customer attempts to write `/catalogOverrides/hs-ps-575k` or create `/catalogProducts/hs-fake-100`. -> Expect `PERMISSION_DENIED`.
+14. **Out-of-Bounds Stock Count or Unbounded Array Injection**: Admin attempts negative `stockCount` (`-5`), below-floor price (`1` KES), or `features` array `> 12` entries on `/catalogProducts/{productId}`. -> Expect `PERMISSION_DENIED`.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ShoppingCart, User } from 'lucide-react';
+import { Search, ShoppingCart, User, FileText } from 'lucide-react';
 import { Product } from '../types/machinery';
 import { HaoSailLogo } from './HaoSailLogo';
 import { useTheme } from '../context/ThemeContext';
@@ -33,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenCart,
   onOpenAuth,
+  onOpenProforma,
   cartCount,
   onNavigateCategory,
   onReturnHome,
@@ -99,6 +100,18 @@ export const Header: React.FC<HeaderProps> = ({
               ⌘K
             </kbd>
           </button>
+
+          {onOpenProforma && (
+            <button
+              type="button"
+              onClick={onOpenProforma}
+              className="btn-press hidden md:inline-flex items-center gap-1.5 rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#1C2029] hover:border-[#004B97] dark:hover:border-sky-400 text-[#111315] dark:text-white px-3 py-1.5 text-xs font-medium cursor-pointer whitespace-nowrap shrink-0"
+              title="Generate Official Quotation PDF"
+            >
+              <FileText className="h-3.5 w-3.5 text-[#004B97] dark:text-sky-400 shrink-0" />
+              <span>Get Quote</span>
+            </button>
+          )}
 
           <button
             type="button"

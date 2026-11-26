@@ -66,7 +66,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   onClearCart,
 }) => {
   const { user, accountProfile, privateInfo, saveOrderToAccount } = useAuth();
-  const { applyOverrideToProduct } = useCatalogOverrides();
+  const { applyOverrideToProduct, applyOverridesToProducts } = useCatalogOverrides();
+  const liveCatalog = applyOverridesToProducts(PRODUCTS);
   const pendingOrderIdRef = useRef<string>('');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -273,7 +274,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   };
 
   const handleQuickAdd = (machineId: string) => {
-    const found = PRODUCTS.find((p) => p.id === machineId);
+    const found = liveCatalog.find((p) => p.id === machineId);
     if (found) {
       onAddToCart(applyOverrideToProduct(found), 1);
     }
@@ -737,7 +738,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   No machinery queued for dispatch
                 </h2>
                 <p className="text-xs sm:text-sm text-[#5A606B] dark:text-slate-400 mt-1 max-w-xl">
-                  Add equipment from our {PRODUCTS.length}-model catalog or select a core workshop machine below to initialize checkout.
+                  Add equipment from our {liveCatalog.length}-model catalog or select a core workshop machine below to initialize checkout.
                 </p>
               </div>
 
@@ -747,7 +748,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 className="btn-press btn-nudge-left inline-flex items-center gap-2 rounded-md bg-[#004B97] hover:bg-[#003B78] px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white cursor-pointer whitespace-nowrap self-start md:self-auto"
               >
                 <ArrowLeft className="h-4 w-4 btn-arrow" />
-                <span>Browse All {PRODUCTS.length} Machines</span>
+                <span>Browse All {liveCatalog.length} Machines</span>
               </button>
             </div>
 

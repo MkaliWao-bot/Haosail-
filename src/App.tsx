@@ -116,6 +116,39 @@ export default function App() {
 
   const isPrintDocumentOpen = isProformaOpen || Boolean(specSheetState);
 
+  const isAnyOverlayOpen =
+    Boolean(selectedProduct) ||
+    isSearchOpen ||
+    isCartOpen ||
+    isCheckoutOpen ||
+    isComparisonOpen ||
+    isAdvisorOpen ||
+    isProformaOpen ||
+    Boolean(specSheetState) ||
+    isAuthOpen ||
+    Boolean(legalModalTab);
+
+  // Strict background scroll lock when product view, modals, drawers, or full-page portal are open
+  useEffect(() => {
+    if (!isAnyOverlayOpen) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
+  }, [isAnyOverlayOpen]);
+
   // Tactile perimeter ping on all clickable storefront buttons
   useEffect(() => {
     return initTactileButtonPing();
@@ -448,6 +481,10 @@ export default function App() {
         onRemoveItem={handleRemoveFromCart}
         onAddToCart={(p, qty = 1) => handleAddToCart(p, qty)}
         onClearCart={() => setCartItems([])}
+        onOpenProforma={() => {
+          setIsCartOpen(false);
+          handleOpenProforma();
+        }}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           setCurrentView('checkout');
@@ -475,6 +512,10 @@ export default function App() {
         onClose={() => setIsProformaOpen(false)}
         product={liveProformaProduct}
         cartItems={syncedCartItems}
+        products={liveProducts}
+        onSyncCartFromQuote={(quotedItems) => {
+          setCartItems(quotedItems);
+        }}
         onProceedToCheckout={() => {
           setIsProformaOpen(false);
           setCurrentView('checkout');

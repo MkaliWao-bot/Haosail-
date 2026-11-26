@@ -190,6 +190,10 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
         <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
           {CATEGORIES_CONFIG.map((cat) => {
             const isSelected = filterState.category === cat.id;
+            const liveCount =
+              cat.id === 'all'
+                ? products.length
+                : products.filter((p) => p.category === cat.id).length;
             return (
               <button
                 key={cat.id}
@@ -209,7 +213,7 @@ export const CatalogSection: React.FC<CatalogSectionProps> = ({
                     isSelected ? 'text-sky-200' : 'text-slate-400 dark:text-slate-500'
                   }`}
                 >
-                  {cat.count}
+                  {liveCount}
                 </span>
               </button>
             );

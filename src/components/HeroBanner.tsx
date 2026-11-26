@@ -250,7 +250,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                     onClick={onOpenProforma}
                     className="text-sm font-medium text-slate-100 hover:text-white underline underline-offset-4 decoration-white/45 hover:decoration-white transition-colors duration-150 cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    Request Proforma Quote
+                    Get Instant Quote
                   </button>
                 )}
               </div>

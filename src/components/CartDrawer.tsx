@@ -10,6 +10,7 @@ import {
   Minus,
   MessageCircle,
   Wrench,
+  FileText,
 } from 'lucide-react';
 import { CartItem, Product } from '../types/machinery';
 import { formatKSh } from '../utils/currency';
@@ -26,6 +27,7 @@ interface CartDrawerProps {
   onAddToCart?: (product: Product, quantity?: number) => void;
   onClearCart?: () => void;
   onProceedToCheckout: () => void;
+  onOpenProforma?: () => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -37,6 +39,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onAddToCart,
   onClearCart,
   onProceedToCheckout,
+  onOpenProforma,
 }) => {
   const [liftgateRequired, setLiftgateRequired] = useState(true);
 
@@ -350,15 +353,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <ArrowRight className="h-3.5 w-3.5 btn-arrow" />
               </button>
 
-              <a
-                href={buildCartWhatsAppUrl(cartItems, { totalAmount: total })}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-press flex w-full items-center justify-center gap-2 rounded-md border border-emerald-600/35 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-colors"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span>Send Cart Quote on WhatsApp</span>
-              </a>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {onOpenProforma && (
+                  <button
+                    type="button"
+                    onClick={onOpenProforma}
+                    className="btn-press flex w-full items-center justify-center gap-1.5 rounded-md border border-[#E2E4E8] dark:border-[#262A33] bg-white dark:bg-[#1C2029] hover:border-[#004B97] dark:hover:border-sky-400 py-2.5 text-xs font-semibold text-[#111315] dark:text-slate-200 cursor-pointer"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-[#004B97] dark:text-sky-400" />
+                    <span>Get Quotation PDF</span>
+                  </button>
+                )}
+
+                <a
+                  href={buildCartWhatsAppUrl(cartItems, { totalAmount: total })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`btn-press flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-600/35 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition-colors ${
+                    !onOpenProforma ? 'sm:col-span-2' : ''
+                  }`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  <span>WhatsApp Quote</span>
+                </a>
+              </div>
             </div>
 
             <div className="flex items-center justify-center gap-1.5 text-center text-[11px] text-[#5A606B] dark:text-slate-400 font-mono">

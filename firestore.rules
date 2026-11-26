@@ -60,7 +60,7 @@ service cloud.firestore {
     // Validation Blueprint: CatalogOverride (/catalogOverrides/{productId})
     function isValidCatalogOverride(data, productId) {
       return data.keys().hasAll(['productId', 'priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt'])
-        && data.keys().hasOnly(['productId', 'priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['productId', 'priceKes', 'inStock', 'stockCount', 'archived', 'updatedBy', 'updatedAt'])
         && data.productId is string
         && data.productId == productId
         && isOrderId(data.productId)
@@ -71,9 +71,63 @@ service cloud.firestore {
         && data.stockCount is int
         && data.stockCount >= 0
         && data.stockCount <= 10000
+        && (!('archived' in data) || data.archived is bool)
         && data.updatedBy is string
         && data.updatedBy == request.auth.uid
         && isValidId(data.updatedBy)
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: CatalogProduct (/catalogProducts/{productId})
+    function isValidCatalogProduct(data, productId) {
+      return data.keys().hasAll([
+          'productId', 'sku', 'name', 'subtitle', 'category', 'categoryLabel',
+          'priceKes', 'stockCount', 'inStock', 'freightTier', 'isFreeFreight',
+          'image', 'powerSource', 'motor', 'voltage', 'amperage', 'capacity',
+          'footprint', 'weightLbs', 'warrantyYears', 'description',
+          'features', 'includedItems', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'productId', 'sku', 'name', 'subtitle', 'category', 'categoryLabel',
+          'subCategory', 'subCategoryLabel', 'priceKes', 'originalPriceKes',
+          'stockCount', 'inStock', 'freightTier', 'isFreeFreight', 'isPopular',
+          'isNewArrival', 'image', 'powerSource', 'motor', 'voltage', 'amperage',
+          'capacity', 'footprint', 'weightLbs', 'warrantyYears', 'description',
+          'features', 'includedItems', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.productId is string
+        && data.productId == productId
+        && isOrderId(data.productId)
+        && data.sku is string && data.sku.size() >= 2 && data.sku.size() <= 40
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 140
+        && data.subtitle is string && data.subtitle.size() >= 1 && data.subtitle.size() <= 200
+        && data.category in ['woodworking', 'auto-maintenance', 'welding-metalworking', 'construction-concrete', 'workshop-tools']
+        && data.categoryLabel is string && data.categoryLabel.size() >= 2 && data.categoryLabel.size() <= 80
+        && (!('subCategory' in data) || (data.subCategory is string && data.subCategory.size() <= 60))
+        && (!('subCategoryLabel' in data) || (data.subCategoryLabel is string && data.subCategoryLabel.size() <= 80))
+        && (data.priceKes is int || data.priceKes is float) && data.priceKes >= 100 && data.priceKes <= 50000000
+        && (!('originalPriceKes' in data) || ((data.originalPriceKes is int || data.originalPriceKes is float) && data.originalPriceKes >= 0 && data.originalPriceKes <= 50000000))
+        && data.stockCount is int && data.stockCount >= 0 && data.stockCount <= 10000
+        && data.inStock is bool
+        && data.freightTier in ['standard-ground', 'freight-ltl', 'heavy-freight']
+        && data.isFreeFreight is bool
+        && (!('isPopular' in data) || data.isPopular is bool)
+        && (!('isNewArrival' in data) || data.isNewArrival is bool)
+        && data.image is string && data.image.size() >= 1 && data.image.size() <= 1000
+        && data.powerSource in ['all', 'corded-230v', 'corded-115v', 'cordless-18v', '3-phase-400v', 'engine-manual']
+        && data.motor is string && data.motor.size() >= 1 && data.motor.size() <= 100
+        && data.voltage is string && data.voltage.size() >= 1 && data.voltage.size() <= 80
+        && data.amperage is string && data.amperage.size() >= 1 && data.amperage.size() <= 60
+        && data.capacity is string && data.capacity.size() >= 1 && data.capacity.size() <= 120
+        && data.footprint is string && data.footprint.size() >= 1 && data.footprint.size() <= 100
+        && (data.weightLbs is int || data.weightLbs is float) && data.weightLbs >= 1 && data.weightLbs <= 100000
+        && data.warrantyYears is int && data.warrantyYears >= 1 && data.warrantyYears <= 10
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 1500
+        && data.features is list && data.features.size() <= 12 && (data.features.size() == 0 || data.features[0] is string)
+        && data.includedItems is list && data.includedItems.size() <= 12 && (data.includedItems.size() == 0 || data.includedItems[0] is string)
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.updatedBy is string && data.updatedBy == request.auth.uid && isValidId(data.updatedBy)
+        && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
 
@@ -158,7 +212,7 @@ service cloud.firestore {
         || (prevStatus == 'dispatched' && nextStatus in ['dispatched', 'completed']);
     }
 
-    // Live Catalog Overrides (publicly readable non-PII pricing/stock; Admin-only writes)
+    // Live Catalog Overrides (publicly readable non-PII pricing/stock/archive; Admin-only writes)
     match /catalogOverrides/{productId} {
       allow get: if isOrderId(productId);
       allow list: if request.query.limit <= 200;
@@ -173,7 +227,38 @@ service cloud.firestore {
         && isValidCatalogOverride(incoming(), productId)
         && incoming().productId == existing().productId
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['priceKes', 'inStock', 'stockCount', 'updatedBy', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['priceKes', 'inStock', 'stockCount', 'archived', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isOrderId(productId) && isAdmin();
+    }
+
+    // Admin-Created Dynamic Catalog Products (publicly readable non-PII catalog; Admin-only CRUD)
+    match /catalogProducts/{productId} {
+      allow get: if isOrderId(productId);
+      allow list: if request.query.limit <= 200;
+
+      allow create: if isOrderId(productId)
+        && isAdmin()
+        && isValidCatalogProduct(incoming(), productId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOrderId(productId)
+        && isAdmin()
+        && isValidCatalogProduct(incoming(), productId)
+        && incoming().productId == existing().productId
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'sku', 'name', 'subtitle', 'category', 'categoryLabel',
+          'subCategory', 'subCategoryLabel', 'priceKes', 'originalPriceKes',
+          'stockCount', 'inStock', 'freightTier', 'isFreeFreight', 'isPopular',
+          'isNewArrival', 'image', 'powerSource', 'motor', 'voltage', 'amperage',
+          'capacity', 'footprint', 'weightLbs', 'warrantyYears', 'description',
+          'features', 'includedItems', 'updatedBy', 'updatedAt'
+        ]);
 
       allow delete: if isOrderId(productId) && isAdmin();
     }
